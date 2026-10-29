@@ -13,8 +13,13 @@ static func build(definition: ForestPlantDefinition) -> ArrayMesh:
 			offset += Vector3(cos(angle), 0, sin(angle)) * module.radial_offset
 			var scale_v := module.scale_start + module.scale_step * float(i)
 			assert(scale_v.x > 0 and scale_v.y > 0 and scale_v.z > 0)
-			var transform := Transform3D(Basis(Vector3.UP, angle).scaled(scale_v), offset)
-			_append(surface, module.mesh, transform, module.color)
+			var rotation := (
+				Basis(Vector3.UP, angle) * Basis.from_euler(module.rotation_degrees * PI / 180.0)
+			)
+			var transform := Transform3D(rotation.scaled(scale_v), offset)
+			var color := module.color
+			color.a = 0.0 if module.foliage else 1.0  # Geometry tag, not transparency.
+			_append(surface, module.mesh, transform, color)
 	return surface.commit()
 
 

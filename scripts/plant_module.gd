@@ -11,3 +11,5 @@ extends Resource
 @export var scale_start := Vector3.ONE
 @export var scale_step := Vector3.ZERO
 @export var color := Color.WHITE
+@export var foliage := false
+@export var rotation_degrees := Vector3.ZERO

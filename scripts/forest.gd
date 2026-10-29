@@ -5,6 +5,7 @@ var settings: ForestSettings = load("res://data/forest.tres")
 var land := ForestLandscape.new(settings)
 var water := ForestWatershed.new(land)
 var groundcover := ForestGroundcover.new(water)
+var trees := ForestTrees.new(land)
 var barrier := land.channel_barrier()
 var barrier_enabled := false
 var terrain := ForestTerrainView.new()
@@ -27,6 +28,7 @@ var ecology_accum := 0.0
 var total_wall := 0.0
 var capture_dir := ""
 var capture_step := 0
+var capture_pending := false
 var walkthrough := false
 var simulation_usec := 0
 var simulation_steps := 0
@@ -35,6 +37,8 @@ var accelerated_fps := 0.0
 var accelerated_achieved_speed := 0.0
 var accelerated_start_wall := 0.0
 var accelerated_start_clock := 0.0
+var season_preview := 0
+var paused_before_preview := false
 
 
 func _ready() -> void:
@@ -53,8 +57,10 @@ func _ready() -> void:
 	add_child(terrain)
 	terrain.configure(land, camera)
 	add_child(vegetation)
-	vegetation.build(land, water, groundcover)
+	vegetation.build(land, water, groundcover, trees)
 	vegetation.refresh_plants()
+	vegetation.refresh_trees(_display_climate())
+	atmosphere.set_season(_display_climate())
 	add_child(water_view)
 	water_view.configure(water)
 	add_child(dam_view)
@@ -66,7 +72,8 @@ func _ready() -> void:
 	hud.pause_requested.connect(_toggle_pause)
 	hud.speed_requested.connect(_set_speed)
 	hud.view_requested.connect(camera.view)
-	hud.refresh(water, vegetation, groundcover, barrier_enabled)
+	hud.season_requested.connect(_cycle_season)
+	_refresh_hud()
 	camera.view(1)
 	print(
 		"FOREST_READY Redot=",
@@ -92,11 +99,16 @@ func _process(dt: float) -> void:
 		# Keep debt rather than changing physics/dropping requested model time.
 		while accumulator >= settings.water_step and Time.get_ticks_usec() - budget_start < 6000:
 			var started := Time.get_ticks_usec()
+			var climate := ForestClimate.sample(
+				water.clock, settings.start_day, settings.latitude_deg
+			)
+			water.native.set_evaporation(settings.evaporation_m_s * climate.evaporation)
 			water.step(settings.water_step, false)
 			ecology_accum += settings.water_step
 			if ecology_accum >= settings.ecology_interval:
 				water.sync_fields()
 				groundcover.step(ecology_accum, water)
+				trees.step(ecology_accum, water)
 				ecology_accum = 0.0
 			simulation_usec += Time.get_ticks_usec() - started
 			simulation_steps += 1
@@ -116,7 +128,9 @@ func _process(dt: float) -> void:
 	if vegetation_accum >= .5:
 		vegetation_accum = 0
 		vegetation.refresh_plants()
-		hud.refresh(water, vegetation, groundcover, barrier_enabled, sim_speed, achieved_speed)
+		vegetation.refresh_trees(_display_climate())
+		atmosphere.set_season(_display_climate())
+		_refresh_hud()
 	if capture_dir != "":
 		_capture_sequence()
 
@@ -139,12 +153,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			_toggle_pause()
 		KEY_F:
 			hud.visible = not hud.visible
+		KEY_T:
+			_cycle_season()
+		KEY_M:
+			hud.toggle_map()
 
 
 func _toggle_rain() -> void:
 	water.raining = not water.raining
 	atmosphere.set_rain(water.raining)
-	hud.refresh(water, vegetation, groundcover, barrier_enabled)
+	_refresh_hud()
 	hud.notice(
 		(
 			"Начался дождь: почва впитывает воду, низины собирают сток."
@@ -158,7 +176,7 @@ func _toggle_dam() -> void:
 	barrier_enabled = not barrier_enabled
 	water.set_barrier(barrier, barrier_enabled)
 	dam_view.visible = barrier_enabled
-	hud.refresh(water, vegetation, groundcover, barrier_enabled)
+	_refresh_hud()
 	hud.notice(
 		(
 			"В русле появилась преграда. Наблюдаем верхний бьеф."
@@ -169,8 +187,51 @@ func _toggle_dam() -> void:
 
 
 func _toggle_pause() -> void:
+	if season_preview != 0:
+		season_preview = 0
+		paused = true
 	paused = not paused
 	hud.set_paused(paused)
+	_refresh_hud()
+
+
+func _display_climate() -> Dictionary:
+	if season_preview != 0:
+		var day: float = [0, 20, 125, 200, 275][season_preview]
+		return ForestClimate.sample(0, day, settings.latitude_deg)
+	return ForestClimate.sample(water.clock, settings.start_day, settings.latitude_deg)
+
+
+func _cycle_season() -> void:
+	if season_preview == 0:
+		paused_before_preview = paused
+	season_preview = (season_preview + 1) % 5
+	paused = true if season_preview != 0 else paused_before_preview
+	hud.set_paused(paused)
+	vegetation.refresh_trees(_display_climate())
+	atmosphere.set_season(_display_climate())
+	_refresh_hud()
+	hud.notice(
+		(
+			"Просмотр сезона на паузе. T — следующий; после осени вернётся текущая дата."
+			if season_preview != 0
+			else "Текущая дата возвращена. Запасы и возраст деревьев не менялись."
+		)
+	)
+
+
+func _refresh_hud() -> void:
+	hud.refresh(
+		water,
+		vegetation,
+		groundcover,
+		barrier_enabled,
+		sim_speed,
+		achieved_speed,
+		trees,
+		_display_climate(),
+		season_preview != 0
+	)
 
 
 func _set_speed(value: float) -> void:
@@ -182,13 +243,15 @@ func _set_speed(value: float) -> void:
 
 
 func _capture_sequence() -> void:
+	if capture_pending:
+		return
 	if total_wall > 3 and capture_step == 0:
-		_save_frame("01-valley.png")
+		await _save_frame("01-valley.png")
 		camera.view(2)
 		capture_step = 1
 	elif total_wall > 5 and capture_step == 1:
 		normal_fps = Engine.get_frames_per_second()
-		_save_frame("02-creek.png")
+		await _save_frame("02-creek.png")
 		camera.view(3)
 		_toggle_dam()
 		_toggle_rain()
@@ -197,7 +260,7 @@ func _capture_sequence() -> void:
 		accelerated_start_clock = water.clock
 		capture_step = 2
 	elif total_wall > 23 and capture_step == 2:
-		_save_frame("03-rain-dam.png")
+		await _save_frame("03-rain-dam.png")
 		accelerated_fps = Engine.get_frames_per_second()
 		accelerated_achieved_speed = (
 			(water.clock - accelerated_start_clock) / (total_wall - accelerated_start_wall)
@@ -206,16 +269,40 @@ func _capture_sequence() -> void:
 		hud.set_paused(true)
 		capture_step = 3
 	elif total_wall > 27 and capture_step == 3:
-		_write_report("runtime.json")
+		camera.view(1)
+		if water.raining:
+			_toggle_rain()
+		_cycle_season()
+		await _save_frame("04-winter.png")
 		capture_step = 4
+	elif total_wall > 29 and capture_step == 4:
+		_cycle_season()
+		await _save_frame("05-spring.png")
+		capture_step = 5
+	elif total_wall > 31 and capture_step == 5:
+		_cycle_season()
+		await _save_frame("06-summer.png")
+		capture_step = 6
+	elif total_wall > 33 and capture_step == 6:
+		_cycle_season()
+		hud.toggle_map()
+		_refresh_hud()
+		await _save_frame("07-autumn-water.png")
+		capture_step = 7
+	elif total_wall > 35 and capture_step == 7:
+		_cycle_season()
+		_write_report("runtime.json")
+		capture_step = 8
 		if not walkthrough:
 			get_tree().quit()
 
 
 func _save_frame(filename: String) -> void:
 	DirAccess.make_dir_recursive_absolute(capture_dir)
-	RenderingServer.force_draw()
+	capture_pending = true
+	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(capture_dir.path_join(filename))
+	capture_pending = false
 	print("CAPTURE ", filename)
 
 
@@ -242,6 +329,12 @@ func _write_report(filename: String) -> void:
 		"balance_error": water.balance_error(),
 		"min_depth": min_depth,
 		"plant_ticks": groundcover.ticks,
+		"tree_ticks": trees.ticks,
+		"living_trees": trees.alive.count(1),
+		"tree_deaths": trees.deaths,
+		"tree_transpired_m3": trees.transpired_m3,
+		"calendar": _display_climate(),
+		"season_preview": season_preview,
 		"model_time": water.clock,
 		"dam": barrier_enabled,
 		"raining": water.raining,
@@ -298,11 +391,29 @@ func _check_controls() -> void:
 	assert(barrier_enabled)
 	_unhandled_input(key)
 	assert(not barrier_enabled)
+	var model_before: Dictionary = water.native.snapshot()
+	var trees_before: Dictionary = trees.snapshot()
+	for i in 5:
+		hud.season_requested.emit()
+		assert(season_preview == (i + 1) % 5)
+		if season_preview != 0:
+			assert(paused)
+	assert(not paused, "preview restores the prior pause state")
+	assert(
+		water.native.snapshot() == model_before and trees.snapshot() == trees_before,
+		"season preview does not age trees or alter water"
+	)
+	hud.toggle_map()
+	assert(hud.hydro_map.visible)
+	hud.toggle_map()
+	assert(not hud.hydro_map.visible)
 	var file := FileAccess.open("res://artifacts/controls.json", FileAccess.WRITE)
 	file.store_string(
 		JSON.stringify(
 			{
 				"passed": true,
+				"season_preview_read_only": true,
+				"water_map_toggle": true,
 				"scope": "Scene signals and key handler; not physical mouse/keyboard input"
 			}
 		)

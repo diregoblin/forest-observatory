@@ -1,4 +1,4 @@
-# Native hydrology, first working slice
+# Native surface + shallow groundwater hydrology
 
 The game has no Python runtime dependency. C++17 `Hydro` owns SI/double arrays;
 `ForestHydroNative` is a thin batch GDExtension adapter. GDScript reads snapshots.
@@ -72,22 +72,46 @@ integrated for the soil clock (the demand is not a water reserve).
 
 At each 30-model-second soil boundary: deposit the reserved infiltration; move
 top water above field capacity into available root storage; drain root excess
-to an **external deep sink**; apply accumulated soil evaporation above the
-residual threshold. All exchanges are bounded. The deep sink does not yet feed
-the creek. The interval is independently configurable; frequency sensitivity
+to the mobile shallow store when enabled (legacy mode: external deep sink);
+apply accumulated soil evaporation above the
+residual threshold. All exchanges are bounded. The default valley enables groundwater. Shared upwind Darcy face fluxes
+redistribute it along hydraulic head `bed - aquifer_m + ground / specific_yield`.
+An explicit diffusion ceiling and summed-donor bounds limit each slow substep;
+saturation excess is transferred to surface water. Below-ground outer boundaries
+are sealed; surface barriers do not implicitly become underground cutoff walls.
+The persistent initial stream starts with saturated groundwater beneath it;
+other cells start at the declared 60% mobile capacity. All of it is initial water,
+not a new source. Root drainage is counted as internal recharge. The interval is independently configurable; frequency sensitivity
 is an operator-splitting test, not a promise of frequency-independent physics.
+
+The mobile aquifer is a **conceptual extra reservoir**, not a resolved saturated
+pore volume within the two soil buckets. Its default thickness is 1.5 m, effective
+specific yield 0.18, lateral conductivity 1e-4 m/s. These scenario values are not
+calibrated. Instantaneous saturation-excess returnflow does not resolve
+surface-pond backpressure, capillary rise, reverse bank storage or freeze/thaw.
+No equivalence to Landlab GroundwaterDupuitPercolator is claimed. That maintained
+component was inspected as an existing reference; Python was not embedded and
+its regularized numerical solver was not copied.
+
+Trees submit one aggregated root-demand array. The native core returns actual
+withdrawals above residual root water and records `transpired_m3`; co-located trees
+share each cell's fulfillment ratio. Invalid demands are rejected before mutation.
+Surface evaporation is adjusted by the same model calendar as tree phenology.
 
 Ledger:
 
 ```text
-surface + top + root + pending + outlet + evaporation + deep_drain
+surface + top + root + pending + groundwater + outlet + evaporation + deep_drain + transpiration
     - initial_storage - rain_and_source_input = residual
 ```
 
 Infiltration/percolation are internal transfers and are not added as external
 losses. Save/restore includes both q histories, pending storage/demand, the partial
 soil clock, parameters, crests and cumulative ledger. Restore validates a candidate
-before replacing the running core. The GDScript file API saves **hydrology only**,
+before replacing the running core. Native checkpoint version 2 adds groundwater, seepage and transpiration. Native
+v1 import retains the old external-drain physics; the world wrapper rejects
+configuration mismatches rather than silently changing saved physics.
+The GDScript file API saves **hydrology only**,
 not camera/plant state or a finished full-world save system.
 
 Rendering samples at 10 wall-Hz and blends the last two depth images each frame;
@@ -106,7 +130,7 @@ checks, not physical convergence of the actual forest watershed. The benchmark
 measures CPU core only; `artifacts/runtime.json` measures the rendered scene.
 
 Still pending: an offline Landlab comparison, real-world calibration, Green–Ampt,
-lateral subsurface/base flow, spatially varying soil profiles, physically driven
+spatially varying soil profiles, surface-stage groundwater coupling, physically driven
 water ripples/shoreline reconstruction and the point inspector. GPU computation
 has not been implemented. Soil rates and climate are plausible scenario inputs,
 not field measurements or validated ecological parameters.
@@ -122,3 +146,7 @@ not field measurements or validated ecological parameters.
   Landlab is [MIT, Copyright The Landlab Team](https://github.com/landlab/landlab/blob/master/LICENSE.md).
 - The pinned [redot-cpp](https://github.com/Redot-Engine/redot-cpp/tree/ef6e110918198417521d87335a1bb9d883f5a5a4)
   dependency retains its upstream MIT license/copyright in `native/deps/redot-cpp/LICENSE.md`.
+
+- [Landlab GroundwaterDupuitPercolator source](https://github.com/landlab/landlab/blob/master/src/landlab/components/groundwater/dupuit_percolator.py):
+  maintained Boussinesq/Dupuit reference inspected before the bounded native model.
+  Not executed or imported; our saturation-excess coupling is simpler.

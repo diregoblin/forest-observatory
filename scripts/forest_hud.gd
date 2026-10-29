@@ -6,6 +6,7 @@ signal dam_requested
 signal pause_requested
 signal speed_requested(value: float)
 signal view_requested(index: int)
+signal season_requested
 
 var info: Label
 var journal: Label
@@ -14,6 +15,10 @@ var plant_label: Label
 var rain_button: Button
 var dam_button: Button
 var pause_button: Button
+var season_button: Button
+var calendar_label: Label
+var hydro_map := ForestHydrologyMap.new()
+var map_legend: Label
 var notices: Array[String] = ["Исток питает ручей. Долина просыпается."]
 
 
@@ -49,10 +54,11 @@ func configure(settings: ForestSettings) -> void:
 	style.content_margin_bottom = 19
 	panel.add_theme_stylebox_override("panel", style)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
+	v.add_theme_constant_override("separation", 7)
 	panel.add_child(v)
 	_label(v, "НАБЛЮДЕНИЕ", 12, Color(.70, .76, .60))
-	info = _label(v, "", 17, Color(.93, .94, .83))
+	info = _label(v, "", 15, Color(.93, .94, .83))
+	calendar_label = _label(v, "", 14, Color(.85, .89, .74))
 	weather_label = _label(v, "", 14, Color(.79, .84, .74))
 	plant_label = _label(v, "", 14, Color(.79, .84, .74))
 	v.add_child(HSeparator.new())
@@ -64,6 +70,10 @@ func configure(settings: ForestSettings) -> void:
 	for s in [1, 8, 60, 600]:
 		var b := _button(speeds, "×" + str(s), func(): speed_requested.emit(float(s)))
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var diagnostics := HBoxContainer.new()
+	v.add_child(diagnostics)
+	season_button = _button(diagnostics, "Сезоны · T", func(): season_requested.emit())
+	_button(diagnostics, "Вода · M", toggle_map)
 	v.add_child(HSeparator.new())
 	_label(v, "ТОЧКИ НАБЛЮДЕНИЯ", 12, Color(.70, .76, .60))
 	_button(v, "1   Над кронами", func(): view_requested.emit(1))
@@ -72,14 +82,14 @@ func configure(settings: ForestSettings) -> void:
 	var footer := Label.new()
 	footer.text = (
 		"ПКМ + WASD — полёт   ·   Q/E — высота   ·   Shift — быстрее"
-		+ "   ·   R дождь   ·   B преграда   ·   F скрыть панель"
+		+ "\nR дождь   ·   B преграда   ·   T просмотр сезонов   ·   M карта воды   ·   F панель"
 	)
 	footer.add_theme_font_size_override("font_size", 14)
 	footer.add_theme_color_override("font_color", Color(.90, .92, .82))
 	footer.anchor_top = 1
 	footer.anchor_bottom = 1
 	footer.offset_left = 38
-	footer.offset_top = -42
+	footer.offset_top = -55
 	footer.offset_bottom = -16
 	root.add_child(footer)
 	var right := VBoxContainer.new()
@@ -94,6 +104,27 @@ func configure(settings: ForestSettings) -> void:
 	journal = _label(right, notices[0], 15, Color(.94, .94, .85))
 	journal.custom_minimum_size.x = 320
 	journal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hydro_map.position = Vector2(-296, 340)
+	hydro_map.anchor_left = 1
+	hydro_map.anchor_right = 1
+	hydro_map.size = Vector2(256, 256)
+	hydro_map.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	hydro_map.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hydro_map.visible = false
+	root.add_child(hydro_map)
+	map_legend = _label(
+		root,
+		(
+			"ГРУНТОВАЯ ВОДА · север ↑\nКоричневый → голубой: запас 0–100%"
+			+ "\nСиний: поверхность · жёлтый: выход воды"
+		),
+		13,
+		Color(.94, .94, .85)
+	)
+	map_legend.position = Vector2(-360, 610)
+	map_legend.anchor_left = 1
+	map_legend.anchor_right = 1
+	map_legend.visible = false
 
 
 func _label(parent: Node, s: String, size: int, c: Color) -> Label:
@@ -112,7 +143,7 @@ func _button(parent: Node, s: String, callback: Callable) -> Button:
 	var b := Button.new()
 	b.text = s
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	b.custom_minimum_size.y = 33
+	b.custom_minimum_size.y = 30
 	b.add_theme_font_size_override("font_size", 15)
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(.16, .23, .18, .9)
@@ -134,16 +165,23 @@ func refresh(
 	groundcover: ForestGroundcover,
 	barrier_enabled: bool,
 	requested_speed := 2.0,
-	achieved_speed := 0.0
+	achieved_speed := 0.0,
+	trees: ForestTrees = null,
+	climate: Dictionary = {},
+	preview := false
 ) -> void:
 	info.text = (
-		"Время  %02d:%02d:%02d\nПоверхность  %d м³\nВ почве  %d м³\nТемп ×%.0f · факт ×%.1f"
+		(
+			"Время  %02d:%02d:%02d\nПоверхность  %d м³\nВ почве  %d м³ · под ней %d м³"
+			+ "\nТемп ×%.0f · факт ×%.1f"
+		)
 		% [
 			int(water.clock / 3600),
 			int(water.clock / 60) % 60,
 			int(water.clock) % 60,
 			water.volume(),
 			water.soil_volume,
+			water.stats.groundwater_m3,
 			requested_speed,
 			achieved_speed
 		]
@@ -154,9 +192,29 @@ func refresh(
 		else "Переменная облачность"
 	)
 	plant_label.text = "%d деревьев · рост травы %d" % [vegetation.tree_count, groundcover.ticks]
+	if trees != null:
+		plant_label.text = "%d живых деревьев · %d сухостой" % [trees.alive.count(1), trees.deaths]
+	if not climate.is_empty():
+		calendar_label.text = (
+			"%s · %s · %.0f °C\nДень %.1f ч%s"
+			% [
+				climate.date,
+				climate.season,
+				climate.temperature_c,
+				climate.daylight_h,
+				" · ПРОСМОТР" if preview else ""
+			]
+		)
+		season_button.text = "К расчёту · T" if preview else "Сезоны · T"
+	hydro_map.refresh(water)
 
 	rain_button.text = "Дождь · ВКЛ" if water.raining else "Дождь · ВЫКЛ"
 	dam_button.text = "Преграда · ЕСТЬ" if barrier_enabled else "Преграда · НЕТ"
+
+
+func toggle_map() -> void:
+	hydro_map.visible = not hydro_map.visible
+	map_legend.visible = hydro_map.visible
 
 
 func set_paused(paused: bool) -> void:

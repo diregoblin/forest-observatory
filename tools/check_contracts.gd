@@ -8,6 +8,19 @@ func _initialize() -> void:
 		var mesh := ForestPlantMeshBuilder.build(definition)
 		assert(mesh.get_surface_count() == 1)
 		assert(mesh.surface_get_array_len(0) > 0)
+		var has_foliage := false
+		for module in definition.modules:
+			has_foliage = has_foliage or module.foliage
+		assert(has_foliage, "seasonal foliage geometry must survive resource loading")
+		var colors: PackedColorArray = mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+		var leaf_vertices := 0
+		var stem_vertices := 0
+		for color in colors:
+			if color.a < .5:
+				leaf_vertices += 1
+			else:
+				stem_vertices += 1
+		assert(leaf_vertices > 0 and stem_vertices > 0, "both leaf and stem tags reach the shader")
 	# A third identity uses the identical builder and resource schema.
 	var extra: ForestPlantDefinition = settings.plants[0].duplicate(true)
 	extra.species_id = &"test_shrub"

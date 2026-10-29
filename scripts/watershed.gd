@@ -17,6 +17,8 @@ var flux_z := PackedFloat64Array()
 var top_water_m := PackedFloat64Array()
 var root_water_m := PackedFloat64Array()
 var pending_water_m := PackedFloat64Array()
+var ground_water_m := PackedFloat64Array()
+var seepage_m_s := PackedFloat64Array()
 var native = ClassDB.instantiate(&"ForestHydroNative")
 var stats := {}
 var raining := false
@@ -85,12 +87,34 @@ func _init(land: ForestLandscape) -> void:
 		"root_conductivity_m_s": profile.root_conductivity_m_s,
 		"evaporation_m_s": config.evaporation_m_s
 	}
+	options.merge(
+		{
+			"groundwater": profile.groundwater_enabled,
+			"aquifer_m": profile.aquifer_depth_m,
+			"specific_yield": profile.specific_yield,
+			"lateral_k_m_s": profile.lateral_conductivity_m_s,
+			"initial_groundwater_fraction": profile.initial_groundwater_fraction
+		}
+	)
 	var ok: bool = native.configure(
-		resolution, cell_size, options, bed, depth, soil, source_indices
+		resolution, cell_size, options, bed, depth, soil, source_indices, _initial_groundwater()
 	)
 	assert(ok, "Invalid native hydrology inputs")
 	_rebuild_crests()
 	sync_fields()
+
+
+func _initial_groundwater() -> PackedFloat64Array:
+	var values := PackedFloat64Array()
+	values.resize(depth.size())
+	var profile := config.soil_profile
+	if profile.groundwater_enabled:
+		for k in depth.size():
+			# Initial persistent stream is connected to a saturated shallow store.
+			# This is a declared scenario initial condition, not water created later.
+			var fraction := 1.0 if depth[k] > 0 else profile.initial_groundwater_fraction
+			values[k] = profile.aquifer_depth_m * profile.specific_yield * fraction
+	return values
 
 
 func volume() -> float:
@@ -169,6 +193,8 @@ func sync_fields() -> void:
 	top_water_m = fields.top_water_m
 	root_water_m = fields.root_water_m
 	pending_water_m = fields.pending_water_m
+	ground_water_m = fields.ground_water_m
+	seepage_m_s = fields.seepage_m_s
 	flux_x = fields.qx
 	flux_z = fields.qz
 	stats = native.metrics()

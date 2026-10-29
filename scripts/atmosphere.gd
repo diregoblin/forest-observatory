@@ -5,6 +5,8 @@ var world_env := Environment.new()
 var sun := DirectionalLight3D.new()
 var rain_particles := GPUParticles3D.new()
 var observer: Camera3D
+var raining := false
+var seasonal_energy := 1.35
 
 
 func configure() -> void:
@@ -41,9 +43,18 @@ func configure() -> void:
 
 
 func set_rain(raining: bool) -> void:
+	self.raining = raining
 	world_env.fog_density = .0014 if raining else .00065
-	sun.light_energy = 1.0 if raining else 1.35
+	sun.light_energy = seasonal_energy * (.74 if raining else 1.0)
 	rain_particles.emitting = raining
+
+
+func set_season(climate: Dictionary) -> void:
+	var warmth := clampf((climate.temperature_c + 9.0) / 29.0, 0, 1)
+	seasonal_energy = lerpf(.75, 1.35, warmth)
+	sun.rotation_degrees.x = -lerpf(12, 45, clampf((climate.daylight_h - 5.0) / 14.0, 0, 1))
+	sun.light_color = Color(.78, .85, 1.0).lerp(Color(1.0, .90, .72), warmth)
+	sun.light_energy = seasonal_energy * (.74 if raining else 1.0)
 
 
 func attach_observer(camera: Camera3D) -> void:

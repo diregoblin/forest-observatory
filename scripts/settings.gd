@@ -24,6 +24,8 @@ extends Resource
 @export var tree_attempts := 4600
 @export var grass_attempts := 22000
 @export var ecology_interval := 60.0
+@export var start_day := 135.0  # 15 May of a 365-day scenario year.
+@export var latitude_deg := 60.0
 @export var optimum_soil_moisture := .65
 @export var moisture_penalty := 1.7
 @export var flood_tolerance := .15
@@ -41,10 +43,12 @@ func validate() -> void:
 	assert(soil_interval_s > 0 and water_display_interval_s > 0)
 	soil_profile.validate()
 	assert(ecology_interval > 0 and growth_per_tick > 0)
+	assert(start_day >= 1 and start_day < 366 and absf(latitude_deg) < 89)
 	assert(dam_fraction > 0 and dam_fraction < 1 and dam_width > 0)
 	assert(not plants.is_empty())
 	var identities := {}
 	for plant in plants:
 		assert(plant is ForestPlantDefinition and plant.weight > 0)
+		plant.validate()
 		assert(not identities.has(plant.species_id), "Duplicate species id")
 		identities[plant.species_id] = true

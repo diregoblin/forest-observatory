@@ -36,6 +36,7 @@ func _initialize() -> void:
 	removed.sync_fields()
 	# Save between soil ticks, with nonzero reserved infiltration and momentum.
 	removed.raining = true
+	assert(removed.native.set_evaporation(config.evaporation_m_s * .7))
 	removed.step(17)
 	var pending := 0.0
 	for v in removed.pending_water_m:
@@ -55,6 +56,7 @@ func _initialize() -> void:
 		resumed.step(3.0)
 	assert(removed.depth == resumed.depth and removed.soil == resumed.soil)
 	assert(removed.flux_x == resumed.flux_x and removed.flux_z == resumed.flux_z)
+	assert(removed.ground_water_m == resumed.ground_water_m)
 	assert(
 		removed.stats == resumed.stats, "complete continuation includes pending soil and counters"
 	)
@@ -64,6 +66,14 @@ func _initialize() -> void:
 	corrupt.depth = wrong
 	assert(not resumed.native.restore(corrupt), "corrupt checkpoint rejected atomically")
 	assert(resumed.stats == resumed.native.metrics(), "failed restore preserves current state")
+	removed.raining = false
+	var seep_before: float = removed.stats.seeped_m3
+	removed.step(120)
+	var dry_weather_seep: float = removed.stats.seeped_m3 - seep_before
+	assert(
+		dry_weather_seep > 0, "stored groundwater returns to actual valley surface after rain stops"
+	)
+	assert(absf(_independent_balance(removed)) < 1e-5)
 	var report := {
 		"passed": true,
 		"backend": "C++ local inertia + two-layer bucket soil",
@@ -80,6 +90,7 @@ func _initialize() -> void:
 		"known_wrong_rejected": true,
 		"save_resume_exact": true,
 		"wrong_landscape_rejected": true,
+		"dry_weather_valley_returnflow_m3": dry_weather_seep,
 		"boundary": "Numerical mechanism/accounting only, not calibrated field hydrology"
 	}
 	var f := FileAccess.open("res://artifacts/water-check.json", FileAccess.WRITE)
@@ -97,6 +108,7 @@ func _independent_balance(water: ForestWatershed) -> float:
 				+ water.top_water_m[k]
 				+ water.root_water_m[k]
 				+ water.pending_water_m[k]
+				+ water.ground_water_m[k]
 			)
 			* water.cell_area
 		)
@@ -105,6 +117,7 @@ func _independent_balance(water: ForestWatershed) -> float:
 		+ water.outflow
 		+ water.evaporated
 		+ water.deep_drain
+		+ float(water.stats.transpired_m3)
 		- water.initial_volume
 		- water.inflow
 	)

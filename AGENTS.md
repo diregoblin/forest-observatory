@@ -35,5 +35,12 @@ run an actual Forward+ preview and inspect saved images. See README.md.
 multiple oriented barriers, model/GPU field conversion, and ecological clock
 partitioning. Keep numerical controls in `tools/check_water.gd` meaningful.
 
+- In scripted `.tres` subresources, assign `script` before script-defined fields.
+  Check loaded foliage/wood tags, not only the resource source text.
+- Capture screenshots after `RenderingServer.frame_post_draw`; a forced draw can
+  still return the previous frame. Verify the date/preview label in seasonal PNGs.
+- Seasonal preview is read-only and paused, never a shortcut for advancing water
+  or tree age. Calendar/evaporation forcing must survive a coupled continuation.
+
 Formatting/lint: optional `.tools-venv/bin/gdformat` and `gdlint`; gdtoolkit 4.x.
 Do not format or patch the third-party addon as part of an application change.

@@ -149,6 +149,47 @@ int main(int argc,char **argv) {
         const double soil_frequency_error=std::abs(frequent.top[0]-slow.top[0])+std::abs(frequent.root[0]-slow.root[0]);
         require(soil_frequency_error<1e-4,"5/30 second soil splitting sensitivity below 0.1 mm");
         balanced(frequent); balanced(slow);
+        // Groundwater equal-head equilibrium over stepped impermeable base.
+        auto gp=isolated(); gp.groundwater=true; gp.specific_yield=0.2; gp.aquifer_m=2;
+        gp.initial_groundwater_fraction=0; gp.soil_interval_s=5;
+        auto gw=flat(2,1,gp,0,0);
+        for(int k=0;k<4;++k) { gw.bed[k]=(k%2)*0.2; gw.ground[k]=(1.0-gw.bed[k])*gp.specific_yield; }
+        gw.initial_m3=gw.surface_m3()+gw.soil_m3()+gw.groundwater_m3();
+        const auto resting_ground=gw.ground; gw.advance(300,false);
+        require(gw.ground==resting_ground,"equal groundwater heads at rest over bed step"); balanced(gw);
+        // Two repeating columns: independent exact nonlinear upwind Darcy solution.
+        auto gp_coarse=gp; gp_coarse.soil_interval_s=30;
+        auto solve_ground=[&](const Parameters &params) {
+            auto h=flat(2,1,params,0,0);
+            for(int k=0;k<4;++k) h.ground[k]=(k%2==0?0.2:0.1);
+            h.initial_m3=h.groundwater_m3(); h.advance(300,false); balanced(h); return h;
+        };
+        auto gw_fine=solve_ground(gp),gw_coarse=solve_ground(gp_coarse);
+        const double decay=std::exp(-gp.lateral_k_m_s*0.3*300/(gp.specific_yield*gp.specific_yield));
+        const double exact_delta=0.3*0.1*decay/(0.3+0.1*(1-decay));
+        const double exact_ground=(0.3+exact_delta)*0.5;
+        const double gw_error=std::abs(gw_fine.ground[0]-exact_ground);
+        require(gw_error<std::abs(gw_coarse.ground[0]-exact_ground) && gw_error<0.0003,
+                "Darcy trajectory approaches independent exact two-column solution");
+        // No rain/source: a saturated hill feeds lower cells; no-K null stays dry.
+        gp.initial_groundwater_fraction=1; gp.soil_interval_s=30;
+        auto seep=flat(2,1,gp,0,0);
+        seep.bed[0]=seep.bed[1]=1;
+        auto no_flow=seep; no_flow.p.lateral_k_m_s=0;
+        seep.advance(300,false); no_flow.advance(300,false);
+        require(seep.seeped_m3>0.001 && no_flow.seeped_m3==0,"groundwater returnflow without rain; no-K null rejects it");
+        balanced(seep); balanced(no_flow);
+        const double baseflow=seep.seeped_m3;
+        seep.advance(300,false);
+        require(seep.seeped_m3>baseflow,"stored groundwater continues feeding surface after rain is off"); balanced(seep);
+        gp.root_conductivity_m_s=0.002/3600;
+        auto recharge=flat(2,1,gp,0,0.9); recharge.advance(30,false);
+        require(recharge.recharged_m3>0 && recharge.deep_drain_m3==0,"root drainage is internal groundwater recharge"); balanced(recharge);
+        auto uptake=flat(2,1,gp,0,0.4);
+        auto taken=uptake.withdraw_roots(std::vector<double>(4,100));
+        require(taken.size()==4 && uptake.transpired_m3>0,"batch root uptake is accounted");
+        require(std::abs(uptake.root[0]-gp.root_m*gp.residual_theta)<1e-12,"competing trees cannot withdraw below residual");
+        require(uptake.withdraw_roots(std::vector<double>(4,1))[0]<1e-12,"depleted roots cannot supply water twice"); balanced(uptake);
         // Same smooth closed-basin wave, analytic cell-average initial condition.
         // Finer-grid reference is restriction-averaged, not nearest sampled.
         auto grid16=wave(16,0.02),grid32=wave(32,0.02),reference=wave(64,0.01);
@@ -164,6 +205,7 @@ int main(int argc,char **argv) {
         Hydro invalid_h; require(!invalid_h.initialize(4,2,invalid,std::vector<double>(16),std::vector<double>(16),std::vector<double>(16),{}),"invalid parameter rejected");
         std::cout<<"{\"passed\":true,\"assertions\":"<<checks<<",\"lake_max_error_m\":"<<lake_error
                  <<",\"soil_frequency_error_m\":"<<soil_frequency_error
+                 <<",\"groundwater_exact_error_m\":"<<gw_error<<",\"dry_weather_returnflow_m3\":"<<baseflow
                  <<",\"grid_error_16_m\":"<<grid_error16<<",\"grid_error_32_m\":"<<grid_error32
                  <<",\"time_error_0_1_m\":"<<time_error1<<",\"time_error_0_05_m\":"<<time_error2
                  <<",\"known_wrong_rejected\":true,\"boundary\":\"Numerical controls, not calibrated field hydrology\"}\n";

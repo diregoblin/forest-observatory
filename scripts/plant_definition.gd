@@ -9,3 +9,34 @@ extends Resource
 @export var minimum_channel_distance := 14.0
 @export var wind_strength := .015
 @export var modules: Array[ForestPlantModule] = []
+@export var deciduous := false
+@export var leaf_on_day := 110.0
+@export var leaf_off_day := 260.0
+@export var leaf_transition_days := 30.0
+@export var autumn_color := Color(.95, .62, .12)
+@export var reference_height_m := 12.0
+@export var max_height_m := 32.0
+@export var crown_radius_m := 3.0
+@export var height_growth_m_year := 0.65
+@export var transpiration_m_s := 2.0 / 1000.0 / 86400.0
+@export var minimum_light := 0.08
+@export var flood_depth_m := 0.25
+@export var stress_days := 16.0
+@export var recovery_days := 8.0
+@export var lethal_stress := 0.95
+@export var lifespan_years := 200.0
+
+
+func validate() -> void:
+	assert(reference_height_m > 0 and max_height_m >= reference_height_m * scale_range.y)
+	assert(crown_radius_m > 0 and height_growth_m_year >= 0 and transpiration_m_s >= 0)
+	assert(minimum_light >= 0 and minimum_light < 1 and flood_depth_m > 0)
+	assert(stress_days > 0 and recovery_days > 0 and lethal_stress > 0 and lethal_stress <= 1)
+	assert(lifespan_years > 0 and scale_range.x > 0 and scale_range.y >= scale_range.x)
+	assert(leaf_on_day > 0 and leaf_transition_days > 0)
+	assert(
+		(
+			leaf_off_day > leaf_on_day + leaf_transition_days
+			and leaf_off_day + leaf_transition_days <= 365
+		)
+	)

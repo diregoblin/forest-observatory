@@ -7,54 +7,48 @@ var groundcover: ForestGroundcover
 var rng := RandomNumberGenerator.new()
 var grass: MultiMeshInstance3D
 var tree_count := 0
+var trees: ForestTrees
+var tree_groups := {}
+var tree_members := {}
+var displayed_tick := -1
+var displayed_day := -1.0
 var growth_texture: ImageTexture
 
 
-func build(l: ForestLandscape, w: ForestWatershed, plants: ForestGroundcover) -> void:
+func build(
+	l: ForestLandscape, w: ForestWatershed, plants: ForestGroundcover, model: ForestTrees
+) -> void:
 	land = l
 	water = w
 	groundcover = plants
-	rng.seed = land.settings.seed
+	trees = model
 	var settings := land.settings
-	var groups := {}
-	var total_weight := 0.0
-	for definition in settings.plants:
-		groups[definition.species_id] = []
-		total_weight += definition.weight
-	for attempt in settings.tree_attempts:
-		var choice := rng.randf() * total_weight
-		var definition: ForestPlantDefinition = settings.plants.back()
-		for candidate in settings.plants:
-			choice -= candidate.weight
-			if choice <= 0:
-				definition = candidate
-				break
-		var x := rng.randf_range(12, settings.extent - 12)
-		var z := rng.randf_range(12, settings.extent - 12)
-		var distance := absf(x - land.channel_x(z))
-		var clearing := (
-			Vector2(x / settings.extent - .375, z / settings.extent - .557).length() < .06
-		)
-		if distance < definition.minimum_channel_distance or clearing:
-			continue
-		if distance < 36 and rng.randf() < .65:
-			continue
-		if land.noise.get_noise_2d(x * .7 + 300, z * .7) < -.24 and rng.randf() < .8:
-			continue
-		var scale_v := (
-			Vector3.ONE * rng.randf_range(definition.scale_range.x, definition.scale_range.y)
-		)
-		var basis := Basis(Vector3.UP, rng.randf() * TAU).scaled(scale_v)
-		groups[definition.species_id].append(
-			Transform3D(basis, Vector3(x, land.height_at(x, z) - .1, z))
-		)
-	for definition in settings.plants:
+	rng.seed = land.settings.seed + 71
+	for s in land.settings.plants.size():
+		var definition: ForestPlantDefinition = land.settings.plants[s]
 		var spots: Array[Transform3D] = []
-		spots.assign(groups[definition.species_id])
-		_instance_group(
-			ForestPlantMeshBuilder.build(definition), spots, Color.WHITE, definition.wind_strength
+		var members: Array[int] = []
+		for i in trees.species.size():
+			if trees.species[i] != s:
+				continue
+			members.append(i)
+			spots.append(
+				Transform3D(
+					Basis(Vector3.UP, trees.yaw[i]).scaled(Vector3.ONE * trees.size[i]),
+					trees.positions[i]
+				)
+			)
+		var node := _instance_group(
+			ForestPlantMeshBuilder.build(definition),
+			spots,
+			Color.WHITE,
+			definition.wind_strength,
+			true
 		)
-		tree_count += spots.size()
+		node.material_override.set_shader_parameter("autumn_color", definition.autumn_color)
+		tree_groups[s] = node
+		tree_members[s] = members
+		tree_count += members.size()
 	var rocks: Array[Transform3D] = []
 	for i in 550:
 		var z := rng.randf_range(10, settings.extent - 10)
@@ -78,12 +72,13 @@ func build(l: ForestLandscape, w: ForestWatershed, plants: ForestGroundcover) ->
 
 
 func _instance_group(
-	mesh: Mesh, spots: Array[Transform3D], tint: Color, wind: float
+	mesh: Mesh, spots: Array[Transform3D], tint: Color, wind: float, tree_enabled := false
 ) -> MultiMeshInstance3D:
 	var node := MultiMeshInstance3D.new()
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
+	mm.use_custom_data = tree_enabled
 	mm.mesh = mesh
 	mm.instance_count = spots.size()
 	for i in spots.size():
@@ -95,6 +90,7 @@ func _instance_group(
 	mat.shader = load("res://shaders/foliage.gdshader")
 	mat.set_shader_parameter("base_color", tint)
 	mat.set_shader_parameter("wind_strength", wind)
+	mat.set_shader_parameter("tree_enabled", tree_enabled)
 	node.material_override = mat
 	node.extra_cull_margin = 3
 	add_child(node)
@@ -133,3 +129,37 @@ func refresh_plants() -> void:
 		grass.material_override.set_shader_parameter("world_extent", land.settings.extent)
 	else:
 		growth_texture.update(image)
+
+
+func refresh_trees(climate: Dictionary) -> void:
+	if displayed_tick == trees.ticks and is_equal_approx(displayed_day, climate.day):
+		return
+	displayed_tick = trees.ticks
+	displayed_day = climate.day
+	grass.material_override.set_shader_parameter(
+		"base_color", Color(.35, .31, .18).lerp(Color(.45, .49, .21), climate.growth)
+	)
+	for s in tree_groups:
+		var definition: ForestPlantDefinition = land.settings.plants[s]
+		var node: MultiMeshInstance3D = tree_groups[s]
+		var members: Array = tree_members[s]
+		for j in members.size():
+			var i: int = members[j]
+			var leaf := ForestClimate.leaves(definition, climate.day)
+			leaf *= (1.0 - trees.stress[i] * .7) if trees.alive[i] else 0.0
+			node.multimesh.set_instance_custom_data(
+				j,
+				Color(
+					leaf,
+					1.0 - trees.stress[i],
+					ForestClimate.autumn(definition, climate.day),
+					trees.alive[i]
+				)
+			)
+			node.multimesh.set_instance_transform(
+				j,
+				Transform3D(
+					Basis(Vector3.UP, trees.yaw[i]).scaled(Vector3.ONE * trees.size[i]),
+					trees.positions[i]
+				)
+			)
