@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=8 format=3]
+[ext_resource type="Script" path="res://scripts/plant_definition.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/plant_module.gd" id="2"]
+[sub_resource type="CylinderMesh" id="TrunkMesh"]
+top_radius = 0.12
+bottom_radius = 0.3
+height = 9.0
+radial_segments = 7
+[sub_resource type="CylinderMesh" id="CrownMesh"]
+top_radius = 0.0
+bottom_radius = 1.0
+height = 1.0
+radial_segments = 13
+[sub_resource type="Resource" id="Trunk"]
+script = ExtResource("2")
+mesh = SubResource("TrunkMesh")
+offset = Vector3(0, 4.5, 0)
+color = Color(0.35, 0.23, 0.13, 1)
+[sub_resource type="Resource" id="Crown"]
+script = ExtResource("2")
+mesh = SubResource("CrownMesh")
+count = 8
+offset = Vector3(0, 4.2, 0)
+step = Vector3(0, 1, 0)
+turn = 0.4
+scale_start = Vector3(3.1, 2.8, 3.1)
+scale_step = Vector3(-0.34, -0.16, -0.34)
+color = Color(0.105, 0.23, 0.16, 1)
+[resource]
+script = ExtResource("1")
+species_id = &"spruce"
+display_name = "Ель"
+weight = 0.68
+modules = Array[ExtResource("2")]([SubResource("Trunk"), SubResource("Crown")])

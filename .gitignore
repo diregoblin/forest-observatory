@@ -1,0 +1,7 @@
+.godot/
+.tools-venv/
+core
+core.*
+artifacts/*.log
+artifacts/*.png
+artifacts/*.json

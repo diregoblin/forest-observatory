@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="ForestSettings" load_steps=4 format=3]
+[ext_resource type="Script" path="res://scripts/settings.gd" id="1"]
+[ext_resource type="Resource" path="res://data/plants/spruce.tres" id="2"]
+[ext_resource type="Resource" path="res://data/plants/birch.tres" id="3"]
+[resource]
+script = ExtResource("1")
+plants = Array[Resource]([ExtResource("2"), ExtResource("3")])

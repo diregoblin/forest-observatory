@@ -1,0 +1,21 @@
+config_version=5
+
+[application]
+config/name="Тихая долина · Forest Observatory"
+run/main_scene="res://main.tscn"
+
+[display]
+window/size/viewport_width=1440
+window/size/viewport_height=900
+window/size/window_width_override=1440
+window/size/window_height_override=900
+window/stretch/mode="canvas_items"
+window/vsync/vsync_mode=0
+
+[rendering]
+renderer/rendering_method="forward_plus"
+textures/default_filters/use_nearest_mipmap_filter=false
+environment/defaults/default_clear_color=Color(0.32, 0.44, 0.48, 1)
+
+[physics]
+3d/physics_engine="GodotPhysics3D"
