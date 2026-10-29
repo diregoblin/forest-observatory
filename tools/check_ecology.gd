@@ -59,6 +59,7 @@ func tick(world: Dictionary, days: float) -> void:
 
 
 func _initialize() -> void:
+	_check_split_clocks()
 	var base: ForestSettings = CONFIG
 	var deciduous: ForestPlantDefinition = base.plants[1]
 	var evergreen: ForestPlantDefinition = base.plants[0]
@@ -115,6 +116,7 @@ func _initialize() -> void:
 	wet.trees.size[1] = .5
 	wet.trees._update_light()
 	assert(wet.trees.light[0] > wet.trees.light[1])
+	_check_canopy_definition(wet.trees)
 	var recovery := chamber(1)
 	recovery.trees.stress.fill(.5)
 	tick(recovery, 1)
@@ -135,7 +137,11 @@ func _initialize() -> void:
 		"winter_no_growth": true,
 		"deciduous_leaf_cycle": true,
 		"evergreen_winter_foliage": true,
-		"same_calendar_as_water": true,
+		"biology_calendar_independent_of_water": true,
+		"split_clock_partition_and_resume": true,
+		"water_tempo_does_not_scale_biological_age": true,
+		"uptake_uses_hydrological_seconds": true,
+		"solar_noon_midnight_and_horizon": true,
 		"shorter_crown_shaded": true,
 		"flood_deaths": flooded.trees.deaths,
 		"coupled_save_resume_exact": true,
@@ -146,3 +152,102 @@ func _initialize() -> void:
 	file.store_string(JSON.stringify(report, "  "))
 	print("ECOLOGY_CHECK ", JSON.stringify(report))
 	quit()
+
+
+func _check_canopy_definition(trees: ForestTrees) -> void:
+	# Definition-derived checker, not another sorting algorithm.
+	for i in trees.species.size():
+		var column := Vector2i(int(trees.positions[i].x / 16), int(trees.positions[i].z / 16))
+		var height := trees._height(i)
+		var expected_cover := 0.0
+		for j in trees.species.size():
+			var other := Vector2i(int(trees.positions[j].x / 16), int(trees.positions[j].z / 16))
+			if trees.alive[j] and other == column and trees._height(j) > height:
+				var definition: ForestPlantDefinition = trees.land.settings.plants[trees.species[j]]
+				expected_cover += PI * pow(definition.crown_radius_m * trees.size[j], 2) / 256.0
+		assert(absf(trees.light[i] - exp(-expected_cover)) < 1e-12)
+
+
+func _drain_clock(clock: ForestEcologyClock) -> void:
+	while clock.step():
+		pass
+
+
+func _check_split_clocks() -> void:
+	var settings: ForestSettings = CONFIG.duplicate(true)
+	var a := ForestEcologyClock.new(settings)
+	var b := ForestEcologyClock.new(settings)
+	a.request(60.125)
+	_drain_clock(a)
+	for i in 481:
+		b.request(.125)
+		_drain_clock(b)
+	assert(a.snapshot() == b.snapshot(), "fixed ecological ticks ignore render partition")
+	assert(a.sample().hour == settings.start_hour, "one visible day returns to the same hour")
+	assert(absf(a.sample().day - settings.start_day - 36.5) < 1e-8)
+	var resumed := ForestEcologyClock.new(settings)
+	assert(resumed.restore(a.snapshot()))
+	for clock in [a, resumed]:
+		clock.request(540)
+		_drain_clock(clock)
+	assert(a.snapshot() == resumed.snapshot() and a.sample() == resumed.sample())
+	assert(a.sample().year == 2 and absf(a.sample().day - settings.start_day) < 1e-8)
+	var before := a.snapshot()
+	var corrupt := before.duplicate(true)
+	corrupt.ticks = -1
+	assert(not a.restore(corrupt) and a.snapshot() == before)
+	var other: ForestSettings = settings.duplicate(true)
+	other.ecology_year_s *= 2
+	assert(not ForestEcologyClock.new(other).restore(before), "changed clock periods rejected")
+	# Independent solar geometry controls: noon > horizon > midnight; sunrise is z=0.
+	var noon := ForestClimate.sample(0, 80, 60, 12)
+	var midnight := ForestClimate.sample(0, 80, 60, 0)
+	var sunrise := ForestClimate.sample(0, 80, 60, 12 - noon.daylight_h / 2)
+	assert(absf(noon.sun_elevation - deg_to_rad(30)) < 1e-8)
+	assert(midnight.sun_elevation < 0 and absf(sunrise.sun_elevation) < 1e-8)
+	assert(ForestClimate.sample(0, 200, 60, 12).daylight_h > noon.daylight_h)
+	# Identical biology, 10x different water throughput. Closed, wet chambers.
+	var slow := chamber(1)
+	var fast := chamber(1)
+	var age_before: float = slow.trees.age_years[0]
+	var size_before: PackedFloat64Array = slow.trees.size.duplicate()
+	var clock := ForestEcologyClock.new(slow.settings)
+	clock.request(slow.settings.ecology_year_s)
+	while clock.step():
+		for world in [slow, fast]:
+			var water_dt := .1 if world == slow else 1.0
+			world.water.step(water_dt)
+			world.trees.step(clock.biological_step_s(), world.water, water_dt)
+	assert(absf(slow.trees.age_years[0] - age_before - 1) < 1e-8)
+	assert(slow.trees.age_years == fast.trees.age_years and slow.trees.size == fast.trees.size)
+	assert(slow.trees.size != size_before, "a compressed year really grows the trees")
+	assert(absf(fast.trees.transpired_m3 / slow.trees.transpired_m3 - 10) < 1e-8)
+	for world in [slow, fast]:
+		assert(absf(world.water.balance_error()) < 1e-5)
+		assert(absf(world.water.clock - world.trees.water_elapsed_s) < 1e-8)
+	# Save/resume all three clocks, not just hydrology. Partial fixed-step debt survives.
+	var hydro: Dictionary = slow.water.native.snapshot()
+	var trees: Dictionary = slow.trees.snapshot()
+	clock.request(.125)
+	var clock_copy := ForestEcologyClock.new(slow.settings)
+	assert(clock_copy.restore(clock.snapshot()))
+	var copy := chamber(1)
+	assert(copy.water.native.restore(hydro))
+	copy.water.sync_fields()
+	assert(copy.trees.restore(trees))
+	for pair in [[slow, clock], [copy, clock_copy]]:
+		var continued_clock: ForestEcologyClock = pair[1]
+		continued_clock.request(.375)
+		while continued_clock.step():
+			pair[0].water.step(.25)
+			pair[0].trees.step(continued_clock.biological_step_s(), pair[0].water, .25)
+	assert(slow.trees.snapshot() == copy.trees.snapshot())
+	assert(slow.water.native.snapshot() == copy.water.native.snapshot())
+	assert(clock.snapshot() == clock_copy.snapshot())
+	# A zero-water tick cannot falsely cure drought.
+	var dry := chamber(0)
+	dry.water.step(1)
+	dry.trees.step(ForestClimate.DAY_S, dry.water, 1)
+	var dry_stress: float = dry.trees.stress[0]
+	dry.trees.step(ForestClimate.DAY_S, dry.water, 0)
+	assert(dry.trees.stress[0] > dry_stress and dry.trees.transpired_m3 == 0)

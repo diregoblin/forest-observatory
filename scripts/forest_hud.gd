@@ -172,8 +172,8 @@ func refresh(
 ) -> void:
 	info.text = (
 		(
-			"Время  %02d:%02d:%02d\nПоверхность  %d м³\nВ почве  %d м³ · под ней %d м³"
-			+ "\nТемп ×%.0f · факт ×%.1f"
+			"Вода  %02d:%02d:%02d\nПоверхность  %d м³\nВ почве  %d м³ · под ней %d м³"
+			+ "\nТемп воды ×%.0f · факт ×%.1f"
 		)
 		% [
 			int(water.clock / 3600),
@@ -196,12 +196,16 @@ func refresh(
 		plant_label.text = "%d живых деревьев · %d сухостой" % [trees.alive.count(1), trees.deaths]
 	if not climate.is_empty():
 		calendar_label.text = (
-			"%s · %s · %.0f °C\nДень %.1f ч%s"
+			"Год %d · %s · %s\n%s · %.0f °C · свет %.1f ч\nСутки %.0f с · год %.0f мин%s"
 			% [
+				climate.year,
 				climate.date,
+				climate.time,
 				climate.season,
 				climate.temperature_c,
 				climate.daylight_h,
+				water.config.ecology_day_s,
+				water.config.ecology_year_s / 60.0,
 				" · ПРОСМОТР" if preview else ""
 			]
 		)

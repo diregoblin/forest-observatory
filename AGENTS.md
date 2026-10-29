@@ -40,7 +40,12 @@ partitioning. Keep numerical controls in `tools/check_water.gd` meaningful.
 - Capture screenshots after `RenderingServer.frame_post_draw`; a forced draw can
   still return the previous frame. Verify the date/preview label in seasonal PNGs.
 - Seasonal preview is read-only and paused, never a shortcut for advancing water
-  or tree age. Calendar/evaporation forcing must survive a coupled continuation.
+  or tree age. The independent ecosystem clock (including pending fixed-step time),
+  tree biology and hydrology/evaporation forcing must survive continuation.
+- Water stays in SI; ecosystem day/night and biological year have separate
+  configurable scene-time periods. Water speed buttons must not change them.
+  Transpiration uses elapsed water seconds, age/growth/stress use biological
+  seconds. This is intentional timescale separation, not an annual watershed claim.
 
 Formatting/lint: optional `.tools-venv/bin/gdformat` and `gdlint`; gdtoolkit 4.x.
 Do not format or patch the third-party addon as part of an application change.

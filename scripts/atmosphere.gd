@@ -2,25 +2,31 @@ class_name ForestAtmosphere
 extends WorldEnvironment
 
 var world_env := Environment.new()
+var sky_mat := ProceduralSkyMaterial.new()
 var sun := DirectionalLight3D.new()
 var rain_particles := GPUParticles3D.new()
 var observer: Camera3D
 var raining := false
 var seasonal_energy := 1.35
+var solar_energy := 1.35
+var displayed_day := -1.0
+var displayed_hour := -1.0
 
 
 func configure() -> void:
 	environment = world_env
 	world_env.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
-	var sky_mat := ProceduralSkyMaterial.new()
+	# The sky changes continuously; avoid quality-mode radiance rebuilds each update.
+	sky.radiance_size = Sky.RADIANCE_SIZE_256
+	sky.process_mode = Sky.PROCESS_MODE_REALTIME
 	sky_mat.sky_top_color = Color(.19, .34, .43)
 	sky_mat.sky_horizon_color = Color(.72, .77, .72)
 	sky_mat.ground_horizon_color = Color(.60, .65, .56)
 	sky_mat.ground_bottom_color = Color(.23, .29, .22)
 	sky.sky_material = sky_mat
 	world_env.sky = sky
-	world_env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	world_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	world_env.ambient_light_color = Color(.62, .73, .75)
 	world_env.ambient_light_energy = .55
 	world_env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
@@ -45,16 +51,36 @@ func configure() -> void:
 func set_rain(raining: bool) -> void:
 	self.raining = raining
 	world_env.fog_density = .0014 if raining else .00065
-	sun.light_energy = seasonal_energy * (.74 if raining else 1.0)
+	sun.light_energy = solar_energy * (.74 if raining else 1.0)
 	rain_particles.emitting = raining
 
 
 func set_season(climate: Dictionary) -> void:
+	# Especially on pause: don't rebuild sky radiance for an unchanged model sample.
+	if climate.day == displayed_day and climate.hour == displayed_hour:
+		return
+	displayed_day = climate.day
+	displayed_hour = climate.hour
 	var warmth := clampf((climate.temperature_c + 9.0) / 29.0, 0, 1)
 	seasonal_energy = lerpf(.75, 1.35, warmth)
-	sun.rotation_degrees.x = -lerpf(12, 45, clampf((climate.daylight_h - 5.0) / 14.0, 0, 1))
-	sun.light_color = Color(.78, .85, 1.0).lerp(Color(1.0, .90, .72), warmth)
-	sun.light_energy = seasonal_energy * (.74 if raining else 1.0)
+	var height: float = sin(climate.sun_elevation)
+	var daylight := smoothstep(-.12, .18, height)
+	var twilight := (1.0 - smoothstep(0, .3, absf(height))) * daylight
+	sun.rotation = Vector3(-climate.sun_elevation, -climate.sun_azimuth, 0)
+	solar_energy = seasonal_energy * sqrt(maxf(0, height))
+	sun.light_color = Color(1.0, .48, .20).lerp(
+		Color(.78, .85, 1.0).lerp(Color(1.0, .90, .72), warmth), smoothstep(0, .4, height)
+	)
+	sun.light_energy = solar_energy * (.74 if raining else 1.0)
+	world_env.ambient_light_energy = lerpf(.28, .55, daylight)
+	world_env.ambient_light_color = Color(.46, .53, .76).lerp(Color(.62, .73, .75), daylight)
+	sky_mat.sky_top_color = Color(.012, .020, .055).lerp(Color(.19, .34, .43), daylight)
+	sky_mat.sky_horizon_color = Color(.05, .07, .13).lerp(
+		Color(.72, .77, .72).lerp(Color(.95, .43, .22), twilight), daylight
+	)
+	sky_mat.ground_horizon_color = Color(.035, .05, .08).lerp(Color(.60, .65, .56), daylight)
+	sky_mat.ground_bottom_color = Color(.018, .025, .035).lerp(Color(.23, .29, .22), daylight)
+	world_env.fog_light_color = Color(.045, .065, .11).lerp(Color(.66, .73, .69), daylight)
 
 
 func attach_observer(camera: Camera3D) -> void:

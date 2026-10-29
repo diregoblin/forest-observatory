@@ -1,7 +1,8 @@
 extends Node3D
 
 # Composition root: model owns state, views read it, controls request changes.
-var settings: ForestSettings = load("res://data/forest.tres")
+var settings: ForestSettings = load("res://data/forest.tres").duplicate(true)
+var ecology_clock := ForestEcologyClock.new(settings)
 var land := ForestLandscape.new(settings)
 var water := ForestWatershed.new(land)
 var groundcover := ForestGroundcover.new(water)
@@ -24,7 +25,6 @@ var achieved_speed := 0.0
 var speed_window_wall := 0.0
 var speed_window_clock := 0.0
 var cancelled_request_s := 0.0
-var ecology_accum := 0.0
 var total_wall := 0.0
 var capture_dir := ""
 var capture_step := 0
@@ -32,6 +32,7 @@ var capture_pending := false
 var walkthrough := false
 var simulation_usec := 0
 var simulation_steps := 0
+var ecology_usec := 0
 var normal_fps := 0.0
 var accelerated_fps := 0.0
 var accelerated_achieved_speed := 0.0
@@ -39,16 +40,23 @@ var accelerated_start_wall := 0.0
 var accelerated_start_clock := 0.0
 var season_preview := 0
 var paused_before_preview := false
+var cycle_check := false
 
 
 func _ready() -> void:
-	settings.validate()
 	Engine.max_fps = 40
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--capture="):
 			capture_dir = arg.trim_prefix("--capture=")
 		if arg == "--walkthrough":
 			walkthrough = true
+		if arg == "--cycle-check":
+			# Isolated render assay, not the shipped periods. No file/config mutation.
+			cycle_check = true
+			settings.ecology_day_s = 20.0
+			settings.ecology_year_s = 60.0
+			settings.ecology_step_s = .1
+	settings.validate()
 	add_child(camera)
 	camera.configure(land, barrier)
 	add_child(atmosphere)
@@ -99,20 +107,13 @@ func _process(dt: float) -> void:
 		# Keep debt rather than changing physics/dropping requested model time.
 		while accumulator >= settings.water_step and Time.get_ticks_usec() - budget_start < 6000:
 			var started := Time.get_ticks_usec()
-			var climate := ForestClimate.sample(
-				water.clock, settings.start_day, settings.latitude_deg
-			)
+			var climate := ecology_clock.sample()
 			water.native.set_evaporation(settings.evaporation_m_s * climate.evaporation)
 			water.step(settings.water_step, false)
-			ecology_accum += settings.water_step
-			if ecology_accum >= settings.ecology_interval:
-				water.sync_fields()
-				groundcover.step(ecology_accum, water)
-				trees.step(ecology_accum, water)
-				ecology_accum = 0.0
 			simulation_usec += Time.get_ticks_usec() - started
 			simulation_steps += 1
 			accumulator -= settings.water_step
+		_advance_ecology(dt)
 	speed_window_wall += dt
 	if speed_window_wall >= 0.5:
 		achieved_speed = (water.clock - speed_window_clock) / speed_window_wall
@@ -124,6 +125,7 @@ func _process(dt: float) -> void:
 		render_accum = fmod(render_accum, settings.water_display_interval_s)
 		water.sync_fields()
 		water_view.refresh()
+		atmosphere.set_season(_display_climate())
 	vegetation_accum += dt
 	if vegetation_accum >= .5:
 		vegetation_accum = 0
@@ -133,6 +135,18 @@ func _process(dt: float) -> void:
 		_refresh_hud()
 	if capture_dir != "":
 		_capture_sequence()
+
+
+func _advance_ecology(dt: float) -> void:
+	ecology_clock.request(dt)
+	var started := Time.get_ticks_usec()
+	while Time.get_ticks_usec() - started < 6000 and ecology_clock.step():
+		water.sync_fields()
+		var biological_dt := ecology_clock.biological_step_s()
+		groundcover.step(biological_dt, water)
+		var tick_started := Time.get_ticks_usec()
+		trees.step(biological_dt, water, maxf(0, water.clock - trees.water_elapsed_s))
+		ecology_usec += Time.get_ticks_usec() - tick_started
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -199,7 +213,7 @@ func _display_climate() -> Dictionary:
 	if season_preview != 0:
 		var day: float = [0, 20, 125, 200, 275][season_preview]
 		return ForestClimate.sample(0, day, settings.latitude_deg)
-	return ForestClimate.sample(water.clock, settings.start_day, settings.latitude_deg)
+	return ecology_clock.sample()
 
 
 func _cycle_season() -> void:
@@ -244,6 +258,9 @@ func _set_speed(value: float) -> void:
 
 func _capture_sequence() -> void:
 	if capture_pending:
+		return
+	if cycle_check:
+		_capture_time_cycle()
 		return
 	if total_wall > 3 and capture_step == 0:
 		await _save_frame("01-valley.png")
@@ -297,11 +314,31 @@ func _capture_sequence() -> void:
 			get_tree().quit()
 
 
+func _capture_time_cycle() -> void:
+	var times := [1.0, 8.5, 10.5, 13.0, 20.0, 40.0, 60.5]
+	var names := ["day", "dusk", "night", "dawn", "autumn", "winter", "next-year"]
+	if capture_step >= times.size() or ecology_clock.elapsed_s < times[capture_step]:
+		return
+	await _save_frame("cycle-%02d-%s.png" % [capture_step, names[capture_step]])
+	_write_report("cycle-%02d-%s.json" % [capture_step, names[capture_step]])
+	capture_step += 1
+	if capture_step == times.size():
+		get_tree().quit()
+
+
 func _save_frame(filename: String) -> void:
 	DirAccess.make_dir_recursive_absolute(capture_dir)
 	capture_pending = true
+	var previous_pause := paused
+	paused = true
+	vegetation.refresh_trees(_display_climate())
+	atmosphere.set_season(_display_climate())
+	_refresh_hud()
+	# Let changed HUD glyphs/sky settle as well as waiting for the submitted frame.
+	await RenderingServer.frame_post_draw
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(capture_dir.path_join(filename))
+	paused = previous_pause
 	capture_pending = false
 	print("CAPTURE ", filename)
 
@@ -330,10 +367,16 @@ func _write_report(filename: String) -> void:
 		"min_depth": min_depth,
 		"plant_ticks": groundcover.ticks,
 		"tree_ticks": trees.ticks,
+		"tree_elapsed_years": trees.elapsed_s / ForestClimate.YEAR_S,
+		"tree_age_0": trees.age_years[0],
 		"living_trees": trees.alive.count(1),
 		"tree_deaths": trees.deaths,
 		"tree_transpired_m3": trees.transpired_m3,
 		"calendar": _display_climate(),
+		"ecology_clock": ecology_clock.snapshot(),
+		"ecology_elapsed_s": ecology_clock.elapsed_s,
+		"ecology_day_s": settings.ecology_day_s,
+		"ecology_year_s": settings.ecology_year_s,
 		"season_preview": season_preview,
 		"model_time": water.clock,
 		"dam": barrier_enabled,
@@ -347,6 +390,7 @@ func _write_report(filename: String) -> void:
 		RenderingServer.viewport_get_measured_render_time_cpu(get_viewport().get_viewport_rid()),
 		"scene_primitives": Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),
 		"average_simulation_step_ms": float(simulation_usec) / maxf(1.0, simulation_steps) / 1000.0,
+		"average_tree_step_ms": float(ecology_usec) / maxf(1.0, trees.ticks) / 1000.0,
 		"renderer": RenderingServer.get_current_rendering_method()
 	}
 	var dest := (
@@ -384,6 +428,20 @@ func _check_controls() -> void:
 		"new tempo cancels old demand, not model time"
 	)
 	sim_speed = 2
+	# Water speed buttons don't alter ecosystem periods or its fixed-step advance.
+	for speed in [1, 600]:
+		_set_speed(speed)
+		var time_before := ecology_clock.elapsed_s
+		_process(settings.ecology_step_s)
+		assert(absf(ecology_clock.elapsed_s - time_before - settings.ecology_step_s) < 1e-8)
+	_toggle_pause()
+	var paused_water: Dictionary = water.native.snapshot()
+	var paused_clock := ecology_clock.snapshot()
+	var paused_trees := trees.snapshot()
+	_process(2)
+	assert(water.native.snapshot() == paused_water and trees.snapshot() == paused_trees)
+	assert(ecology_clock.snapshot() == paused_clock, "pause freezes both independent clocks")
+	_toggle_pause()
 	var key := InputEventKey.new()
 	key.physical_keycode = KEY_B
 	key.pressed = true
@@ -393,6 +451,7 @@ func _check_controls() -> void:
 	assert(not barrier_enabled)
 	var model_before: Dictionary = water.native.snapshot()
 	var trees_before: Dictionary = trees.snapshot()
+	var clock_before := ecology_clock.snapshot()
 	for i in 5:
 		hud.season_requested.emit()
 		assert(season_preview == (i + 1) % 5)
@@ -400,7 +459,11 @@ func _check_controls() -> void:
 			assert(paused)
 	assert(not paused, "preview restores the prior pause state")
 	assert(
-		water.native.snapshot() == model_before and trees.snapshot() == trees_before,
+		(
+			water.native.snapshot() == model_before
+			and trees.snapshot() == trees_before
+			and ecology_clock.snapshot() == clock_before
+		),
 		"season preview does not age trees or alter water"
 	)
 	hud.toggle_map()
@@ -414,6 +477,8 @@ func _check_controls() -> void:
 				"passed": true,
 				"season_preview_read_only": true,
 				"water_map_toggle": true,
+				"independent_ecosystem_tempo": true,
+				"pause_freezes_both_clocks": true,
 				"scope": "Scene signals and key handler; not physical mouse/keyboard input"
 			}
 		)

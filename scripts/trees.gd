@@ -17,6 +17,7 @@ var last_supply := PackedFloat64Array()
 var rng := RandomNumberGenerator.new()
 var ticks := 0
 var elapsed_s := 0.0
+var water_elapsed_s := 0.0
 var transpired_m3 := 0.0
 var deaths := 0
 
@@ -66,10 +67,13 @@ func _init(l: ForestLandscape) -> void:
 		last_supply.append(1)
 
 
-func step(dt: float, water: ForestWatershed) -> void:
+func step(dt: float, water: ForestWatershed, water_dt := -1.0) -> void:
 	assert(dt > 0)
+	# Biology uses accelerated years; uptake uses actual hydrological SI seconds.
+	if water_dt < 0:
+		water_dt = dt
 	var climate := ForestClimate.sample(
-		water.clock - dt * .5, land.settings.start_day, land.settings.latitude_deg
+		elapsed_s + dt * .5, land.settings.start_day, land.settings.latitude_deg
 	)
 	var demand := PackedFloat64Array()
 	demand.resize(water.resolution * water.resolution)
@@ -82,7 +86,9 @@ func step(dt: float, water: ForestWatershed) -> void:
 		var definition: ForestPlantDefinition = land.settings.plants[species[i]]
 		var leaf := ForestClimate.leaves(definition, climate.day)
 		var area := PI * pow(definition.crown_radius_m * size[i], 2)
-		var volume: float = definition.transpiration_m_s * area * leaf * climate.evaporation * dt
+		var volume: float = (
+			definition.transpiration_m_s * area * leaf * climate.evaporation * water_dt
+		)
 		individual_demand[i] = volume
 		demand[root_cells[i]] += volume / water.cell_area
 	var supplied: PackedFloat64Array = water.native.withdraw_roots(demand)
@@ -96,6 +102,8 @@ func step(dt: float, water: ForestWatershed) -> void:
 		var definition: ForestPlantDefinition = land.settings.plants[species[i]]
 		var cell := root_cells[i]
 		var ratio := clampf(supplied[cell] / demand[cell], 0, 1) if demand[cell] > 0 else 1.0
+		if water_dt == 0 and leaf_demand(definition, climate) > 0:
+			ratio = last_supply[i]  # No water tick: don't invent recovery from a zero request.
 		last_supply[i] = ratio
 		var flood := clampf(water.depth[cell] / definition.flood_depth_m - 1.0, 0, 1)
 		var target_stress := maxf(1.0 - ratio, flood)
@@ -133,26 +141,39 @@ func step(dt: float, water: ForestWatershed) -> void:
 			)
 		)
 	elapsed_s += dt
+	water_elapsed_s += water_dt
 	ticks += 1
 	water.sync_fields()
 
 
+func leaf_demand(definition: ForestPlantDefinition, climate: Dictionary) -> float:
+	return (
+		definition.transpiration_m_s
+		* ForestClimate.leaves(definition, climate.day)
+		* climate.evaporation
+	)
+
+
 func _update_light() -> void:
 	# Coarse 16 m canopy columns; taller crowns shade shorter ones.
-	var order: Array[int] = []
+	# Columns are independent: don't globally sort thousands of unrelated crowns.
+	var columns := {}
+	var heights := PackedFloat64Array()
+	heights.resize(species.size())
 	for i in species.size():
-		order.append(i)
-	order.sort_custom(func(a: int, b: int): return _height(a) > _height(b))
-	var cover := {}
-	for i in order:
+		heights[i] = _height(i)
 		var cell := Vector2i(int(positions[i].x / 16), int(positions[i].z / 16))
-		light[i] = exp(-float(cover.get(cell, 0.0)))
-		if alive[i]:
-			var definition: ForestPlantDefinition = land.settings.plants[species[i]]
-			cover[cell] = (
-				float(cover.get(cell, 0.0))
-				+ PI * pow(definition.crown_radius_m * size[i], 2) / 256.0
-			)
+		if not columns.has(cell):
+			columns[cell] = []
+		columns[cell].append(i)
+	for column in columns.values():
+		column.sort_custom(func(a: int, b: int): return heights[a] > heights[b])
+		var cover := 0.0
+		for i in column:
+			light[i] = exp(-cover)
+			if alive[i]:
+				var definition: ForestPlantDefinition = land.settings.plants[species[i]]
+				cover += PI * pow(definition.crown_radius_m * size[i], 2) / 256.0
 
 
 func _height(i: int) -> float:
@@ -161,7 +182,7 @@ func _height(i: int) -> float:
 
 func snapshot() -> Dictionary:
 	return {
-		"version": 1,
+		"version": 2,
 		"configuration": _configuration(),
 		"species": species.duplicate(),
 		"positions": positions.duplicate(),
@@ -174,6 +195,7 @@ func snapshot() -> Dictionary:
 		"last_supply": last_supply.duplicate(),
 		"ticks": ticks,
 		"elapsed_s": elapsed_s,
+		"water_elapsed_s": water_elapsed_s,
 		"transpired_m3": transpired_m3,
 		"deaths": deaths,
 		"rng_state": rng.state
@@ -207,6 +229,7 @@ func _configuration() -> Dictionary:
 	return {
 		"start_day": land.settings.start_day,
 		"latitude": land.settings.latitude_deg,
+		"ecology_year_s": land.settings.ecology_year_s,
 		"traits": definitions
 	}
 
@@ -214,7 +237,7 @@ func _configuration() -> Dictionary:
 # gdlint: disable=max-returns
 func restore(state: Dictionary) -> bool:
 	# Validate completely before mutation. Species/config belongs to the same world.
-	if state.get("version", 0) != 1 or state.get("configuration", {}) != _configuration():
+	if state.get("version", 0) != 2 or state.get("configuration", {}) != _configuration():
 		return false
 	for field in [
 		"species",
@@ -246,10 +269,12 @@ func restore(state: Dictionary) -> bool:
 			or state.alive[i] > 1
 		):
 			return false
-	for field in ["ticks", "elapsed_s", "transpired_m3", "deaths", "rng_state"]:
+	for field in ["ticks", "elapsed_s", "water_elapsed_s", "transpired_m3", "deaths", "rng_state"]:
 		if not state.has(field):
 			return false
-	for value in [state.ticks, state.elapsed_s, state.transpired_m3, state.deaths]:
+	for value in [
+		state.ticks, state.elapsed_s, state.water_elapsed_s, state.transpired_m3, state.deaths
+	]:
 		if not is_finite(value) or value < 0:
 			return false
 	yaw = state.yaw.duplicate()
@@ -260,6 +285,7 @@ func restore(state: Dictionary) -> bool:
 	last_supply = state.last_supply.duplicate()
 	ticks = state.ticks
 	elapsed_s = state.elapsed_s
+	water_elapsed_s = state.water_elapsed_s
 	transpired_m3 = state.transpired_m3
 	deaths = state.deaths
 	rng.state = state.rng_state

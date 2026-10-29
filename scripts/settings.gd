@@ -23,8 +23,12 @@ extends Resource
 @export var dam_height := 2.7
 @export var tree_attempts := 4600
 @export var grass_attempts := 22000
-@export var ecology_interval := 60.0
+@export var ecology_interval := 86400.0  # Groundcover interval in biological seconds.
+@export var ecology_day_s := 60.0  # Scene seconds per visible day/night cycle.
+@export var ecology_year_s := 600.0  # Scene seconds per biological year (365 calendar days).
+@export var ecology_step_s := 0.5  # Fixed ecosystem step, independent of water speed.
 @export var start_day := 135.0  # 15 May of a 365-day scenario year.
+@export var start_hour := 12.0
 @export var latitude_deg := 60.0
 @export var optimum_soil_moisture := .65
 @export var moisture_penalty := 1.7
@@ -43,6 +47,9 @@ func validate() -> void:
 	assert(soil_interval_s > 0 and water_display_interval_s > 0)
 	soil_profile.validate()
 	assert(ecology_interval > 0 and growth_per_tick > 0)
+	assert(ecology_day_s > 0 and ecology_year_s > 0 and ecology_step_s > 0)
+	assert(ecology_step_s <= minf(ecology_day_s / 120.0, ecology_year_s / 365.0))
+	assert(start_hour >= 0 and start_hour < 24)
 	assert(start_day >= 1 and start_day < 366 and absf(latitude_deg) < 89)
 	assert(dam_fraction > 0 and dam_fraction < 1 and dam_width > 0)
 	assert(not plants.is_empty())
