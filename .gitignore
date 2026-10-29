@@ -5,3 +5,4 @@ core.*
 artifacts/*.log
 artifacts/*.png
 artifacts/*.json
+artifacts/*.import
