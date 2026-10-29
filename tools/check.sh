@@ -3,6 +3,9 @@ set -euo pipefail
 project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$project_root"
 mkdir -p artifacts
+./tools/build_hydro.sh > artifacts/native-build.log 2>&1
+native/build/hydro_checks > artifacts/native-check.json
+native/build/hydro_checks --benchmark > artifacts/native-benchmark.json
 ./tools/run.sh --headless --editor --import --quit > artifacts/import.log 2>&1
 python - <<'PY'
 from pathlib import Path
@@ -16,7 +19,7 @@ python - <<'PY'
 import json
 from pathlib import Path
 root = Path('artifacts')
-for name in ('water-check', 'contracts', 'controls'):
+for name in ('native-check', 'water-check', 'contracts', 'controls'):
     result = json.loads((root / (name + '.json')).read_text())
     assert result.get('passed') is True, (name, result)
 for name in ('water-check.log', 'contracts.log', 'smoke.log'):

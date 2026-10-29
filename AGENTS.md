@@ -16,10 +16,14 @@ engine installations, services, user saves, or other projects for this work.
   interpolation and wind are presentation only. Seeded generation is local.
 - Keep world dimensions and field resolution in `ForestSettings`. Views use
   the model's cell size and extent; don't silently duplicate grid constants.
-- No physics in shaders: shaders display model fields. Float64 -> float32
-  conversion is centralized in `ForestFieldTexture`.
-- Do not call reservoir exchange shallow-water hydrodynamics or Landlab.
-  Conservation is a numerical check, not ecological/physical validation.
+- No physics in presentation shaders: they display model fields. A dedicated
+  compute backend is allowed after comparison with the native CPU reference;
+  it owns model state, not presentation logic. See DEVELOPMENT_PLAN.md.
+  On the current CPU path, display-only float64 -> float32 conversion remains
+  centralized in `ForestFieldTexture` and never changes authoritative reserves.
+- Current native water is a local-inertial approximation with a declared
+  Froude limiter and bucket soil, not full shallow-water equations or an exact
+  Landlab port. Conservation is a numerical check, not physical validation.
 - Avoid speculative frameworks/ECS and new generic layers without a concrete
   consumer. This is a modular prototype, not an engine rewrite.
 

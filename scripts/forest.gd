@@ -18,6 +18,12 @@ var sim_speed := 2.0
 var paused := false
 var accumulator := 0.0
 var render_accum := 0.0
+var vegetation_accum := 0.0
+var achieved_speed := 0.0
+var speed_window_wall := 0.0
+var speed_window_clock := 0.0
+var cancelled_request_s := 0.0
+var ecology_accum := 0.0
 var total_wall := 0.0
 var capture_dir := ""
 var capture_step := 0
@@ -26,6 +32,9 @@ var simulation_usec := 0
 var simulation_steps := 0
 var normal_fps := 0.0
 var accelerated_fps := 0.0
+var accelerated_achieved_speed := 0.0
+var accelerated_start_wall := 0.0
+var accelerated_start_clock := 0.0
 
 
 func _ready() -> void:
@@ -55,7 +64,7 @@ func _ready() -> void:
 	hud.rain_requested.connect(_toggle_rain)
 	hud.dam_requested.connect(_toggle_dam)
 	hud.pause_requested.connect(_toggle_pause)
-	hud.speed_requested.connect(func(value: float): sim_speed = value)
+	hud.speed_requested.connect(_set_speed)
 	hud.view_requested.connect(camera.view)
 	hud.refresh(water, vegetation, groundcover, barrier_enabled)
 	camera.view(1)
@@ -78,22 +87,36 @@ func _ready() -> void:
 func _process(dt: float) -> void:
 	total_wall += dt
 	if not paused:
-		accumulator += minf(dt, .15) * sim_speed
-		var steps := 0
-		while accumulator >= settings.water_step and steps < 6:
+		accumulator += dt * sim_speed
+		var budget_start := Time.get_ticks_usec()
+		# Keep debt rather than changing physics/dropping requested model time.
+		while accumulator >= settings.water_step and Time.get_ticks_usec() - budget_start < 6000:
 			var started := Time.get_ticks_usec()
-			water.step(settings.water_step)
-			groundcover.step(settings.water_step, water)
+			water.step(settings.water_step, false)
+			ecology_accum += settings.water_step
+			if ecology_accum >= settings.ecology_interval:
+				water.sync_fields()
+				groundcover.step(ecology_accum, water)
+				ecology_accum = 0.0
 			simulation_usec += Time.get_ticks_usec() - started
 			simulation_steps += 1
 			accumulator -= settings.water_step
-			steps += 1
+	speed_window_wall += dt
+	if speed_window_wall >= 0.5:
+		achieved_speed = (water.clock - speed_window_clock) / speed_window_wall
+		speed_window_wall = 0
+		speed_window_clock = water.clock
+	water_view.advance_display(dt)
 	render_accum += dt
-	if render_accum > .25:
-		render_accum = 0
+	if render_accum >= settings.water_display_interval_s:
+		render_accum = fmod(render_accum, settings.water_display_interval_s)
+		water.sync_fields()
 		water_view.refresh()
+	vegetation_accum += dt
+	if vegetation_accum >= .5:
+		vegetation_accum = 0
 		vegetation.refresh_plants()
-		hud.refresh(water, vegetation, groundcover, barrier_enabled)
+		hud.refresh(water, vegetation, groundcover, barrier_enabled, sim_speed, achieved_speed)
 	if capture_dir != "":
 		_capture_sequence()
 
@@ -150,6 +173,14 @@ func _toggle_pause() -> void:
 	hud.set_paused(paused)
 
 
+func _set_speed(value: float) -> void:
+	sim_speed = value
+	# A new tempo replaces unserved demand at the previous tempo, not model state.
+	var fractional := fmod(accumulator, settings.water_step)
+	cancelled_request_s += accumulator - fractional
+	accumulator = fractional
+
+
 func _capture_sequence() -> void:
 	if total_wall > 3 and capture_step == 0:
 		_save_frame("01-valley.png")
@@ -161,11 +192,16 @@ func _capture_sequence() -> void:
 		camera.view(3)
 		_toggle_dam()
 		_toggle_rain()
-		sim_speed = 8
+		sim_speed = 60
+		accelerated_start_wall = total_wall
+		accelerated_start_clock = water.clock
 		capture_step = 2
 	elif total_wall > 23 and capture_step == 2:
 		_save_frame("03-rain-dam.png")
 		accelerated_fps = Engine.get_frames_per_second()
+		accelerated_achieved_speed = (
+			(water.clock - accelerated_start_clock) / (total_wall - accelerated_start_wall)
+		)
 		paused = true
 		hud.set_paused(true)
 		capture_step = 3
@@ -184,6 +220,7 @@ func _save_frame(filename: String) -> void:
 
 
 func _write_report(filename: String) -> void:
+	water.sync_fields()
 	var min_depth := INF
 	for h in water.depth:
 		min_depth = minf(min_depth, h)
@@ -193,6 +230,15 @@ func _write_report(filename: String) -> void:
 		"regions": terrain.data.get_region_count(),
 		"trees": vegetation.tree_count,
 		"water_volume": water.volume(),
+		"soil_volume_m3": water.soil_volume,
+		"hydrology": water.stats,
+		"resolution": water.resolution,
+		"cell_size_m": water.cell_size,
+		"requested_speed": sim_speed,
+		"achieved_model_s_per_wall_s": achieved_speed,
+		"pending_model_s": accumulator,
+		"cancelled_tempo_demand_s": cancelled_request_s,
+		"accelerated_achieved_model_s_per_wall_s": accelerated_achieved_speed,
 		"balance_error": water.balance_error(),
 		"min_depth": min_depth,
 		"plant_ticks": groundcover.ticks,
@@ -217,6 +263,8 @@ func _write_report(filename: String) -> void:
 	)
 	var f := FileAccess.open(dest, FileAccess.WRITE)
 	f.store_string(JSON.stringify(report, "  "))
+	var saved := water.save_state(dest.trim_suffix(".json") + ".water.bin")
+	assert(saved == OK)
 
 
 func _check_controls() -> void:
@@ -235,8 +283,13 @@ func _check_controls() -> void:
 	var position_before := camera.position
 	hud.view_requested.emit(3)
 	assert(camera.position != position_before)
+	accumulator = 100.25
 	hud.speed_requested.emit(8)
 	assert(sim_speed == 8)
+	assert(
+		accumulator == 0.25 and cancelled_request_s == 100.0,
+		"new tempo cancels old demand, not model time"
+	)
 	sim_speed = 2
 	var key := InputEventKey.new()
 	key.physical_keycode = KEY_B

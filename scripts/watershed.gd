@@ -1,8 +1,8 @@
 class_name ForestWatershed
 extends RefCounted
 
-# Conservative reservoir exchange, NOT Landlab/shallow-water hydrodynamics.
-# Lengths in scene metres; model time is intentionally accelerated, uncalibrated.
+## Native local-inertial surface flow + two-layer bucket soil, all in SI.
+## Public arrays are read-only snapshots, never the authoritative reserves.
 var source_indices := PackedInt32Array()
 var config: ForestSettings
 var resolution: int
@@ -12,15 +12,20 @@ var landscape: ForestLandscape
 var bed := PackedFloat64Array()
 var depth := PackedFloat64Array()
 var soil := PackedFloat64Array()
-var delta := PackedFloat64Array()
-var outgoing := PackedFloat64Array()
 var flux_x := PackedFloat64Array()
 var flux_z := PackedFloat64Array()
+var top_water_m := PackedFloat64Array()
+var root_water_m := PackedFloat64Array()
+var pending_water_m := PackedFloat64Array()
+var native = ClassDB.instantiate(&"ForestHydroNative")
+var stats := {}
 var raining := false
 var inflow := 0.0
 var outflow := 0.0
 var infiltrated := 0.0
 var evaporated := 0.0
+var deep_drain := 0.0
+var soil_volume := 0.0
 var initial_volume := 0.0
 var clock := 0.0
 var barriers: Array[ForestBarrier] = []
@@ -38,10 +43,6 @@ func _init(land: ForestLandscape) -> void:
 	bed.resize(resolution * resolution)
 	depth.resize(resolution * resolution)
 	soil.resize(resolution * resolution)
-	delta.resize(resolution * resolution)
-	outgoing.resize(resolution * resolution)
-	flux_x.resize(resolution * resolution)
-	flux_z.resize(resolution * resolution)
 	for j in resolution:
 		for i in resolution:
 			var k := j * resolution + i
@@ -64,22 +65,45 @@ func _init(land: ForestLandscape) -> void:
 		not source_indices.is_empty(),
 		"Grid misses headwater source; refine resolution or widen source"
 	)
+	assert(native != null, "Build native hydrology with tools/build_hydro.sh")
+	var profile := config.soil_profile
+	var options := {
+		"max_step_s": config.water_step,
+		"cfl": config.water_cfl,
+		"manning_n": config.manning_n,
+		"theta": config.water_theta,
+		"max_froude": config.max_froude,
+		"rain_m_s": config.rainfall_m_s,
+		"source_m3_s": config.headwater_m3_s,
+		"soil_interval_s": config.soil_interval_s,
+		"top_m": profile.top_depth_m,
+		"root_m": profile.root_depth_m,
+		"porosity": profile.porosity,
+		"field_theta": profile.field_capacity_theta,
+		"residual_theta": profile.residual_theta,
+		"conductivity_m_s": profile.saturated_conductivity_m_s,
+		"root_conductivity_m_s": profile.root_conductivity_m_s,
+		"evaporation_m_s": config.evaporation_m_s
+	}
+	var ok: bool = native.configure(
+		resolution, cell_size, options, bed, depth, soil, source_indices
+	)
+	assert(ok, "Invalid native hydrology inputs")
 	_rebuild_crests()
-	initial_volume = volume()
+	sync_fields()
 
 
 func volume() -> float:
-	var total := 0.0
-	for h in depth:
-		total += h * cell_area
-	return total
+	return native.metrics().surface_m3
 
 
 func balance_error() -> float:
-	return volume() + outflow + infiltrated + evaporated - initial_volume - inflow
+	return native.metrics().balance_error_m3
 
 
 func volume_in(bounds: Rect2) -> float:
+	# Explicit readback for a diagnostic; never a per-cell extension call.
+	sync_fields()
 	var total := 0.0
 	for j in resolution:
 		for i in resolution:
@@ -126,69 +150,113 @@ func _rebuild_crests() -> void:
 						!= null
 					):
 						crest_z[k] = maxf(crest_z[k], barrier.crest)
+	var ok: bool = native.set_crests(crest_x, crest_z)
+	assert(ok)
 
 
-func step(dt: float) -> void:
+func step(dt: float, copy_fields := true) -> void:
+	var ok: bool = native.advance(dt, raining)
+	assert(ok, "Native hydrology advance failed")
 	clock += dt
-	delta.fill(0.0)
-	outgoing.fill(0.0)
-	flux_x.fill(0.0)
-	flux_z.fill(0.0)
-	# Source volume is independent of the number/area of source cells.
-	var spring_volume := config.headwater_flow * dt
-	for k in source_indices:
-		depth[k] += spring_volume / (float(source_indices.size()) * cell_area)
-	inflow += spring_volume
-	var rain := config.rainfall_intensity * dt if raining else 0.0
-	inflow += rain * cell_area * float(resolution * resolution)
-	for k in resolution * resolution:
-		depth[k] += rain
-		var soak := minf(depth[k], config.infiltration_rate * dt * (1.0 - soil[k]))
-		depth[k] -= soak
-		infiltrated += soak * cell_area
-		soil[k] = clampf(soil[k] + soak * 2.0 - config.soil_drying_rate * dt, 0, 1)
-	# Compute signed face transfers, then limit the SUM of donor outflows.
-	for j in resolution:
-		for i in resolution:
-			var a := j * resolution + i
-			if i < resolution - 1:
-				flux_x[a] = _transfer(a, a + 1, crest_x[a], dt)
-				outgoing[a if flux_x[a] > 0 else a + 1] += absf(flux_x[a])
-			if j < resolution - 1:
-				flux_z[a] = _transfer(a, a + resolution, crest_z[a], dt)
-				outgoing[a if flux_z[a] > 0 else a + resolution] += absf(flux_z[a])
-	for j in resolution:
-		for i in resolution:
-			var a := j * resolution + i
-			if i < resolution - 1:
-				_apply_flux(a, a + 1, flux_x[a])
-			if j < resolution - 1:
-				_apply_flux(a, a + resolution, flux_z[a])
-	for k in resolution * resolution:
-		depth[k] += delta[k]
-		var evap := minf(depth[k], config.evaporation_rate * dt)
-		depth[k] -= evap
-		evaporated += evap * cell_area
-	for i in resolution:
-		var k := (resolution - 1) * resolution + i
-		var drain := depth[k] * minf(config.outlet_rate * dt, config.donor_fraction)
-		depth[k] -= drain
-		outflow += drain * cell_area
+	if copy_fields:
+		sync_fields()
 
 
-func _transfer(a: int, b: int, crest: float, dt: float) -> float:
-	var sa := bed[a] + depth[a]
-	var sb := bed[b] + depth[b]
-	if sa > sb:
-		return config.exchange_rate * dt * maxf(0.0, sa - maxf(sb, crest))
-	return -config.exchange_rate * dt * maxf(0.0, sb - maxf(sa, crest))
+func sync_fields() -> void:
+	var fields: Dictionary = native.fields()
+	depth = fields.depth
+	soil = fields.soil  # Derived saturation of the combined soil profile, not theta.
+	top_water_m = fields.top_water_m
+	root_water_m = fields.root_water_m
+	pending_water_m = fields.pending_water_m
+	flux_x = fields.qx
+	flux_z = fields.qz
+	stats = native.metrics()
+	clock = stats.time_s
+	inflow = stats.input_m3
+	outflow = stats.outlet_m3
+	infiltrated = stats.infiltrated_m3  # Internal transfer; NEVER an external sink.
+	evaporated = stats.evaporated_m3
+	deep_drain = stats.deep_drain_m3
+	soil_volume = stats.soil_m3
+	initial_volume = stats.initial_m3  # Surface + both layers + pending reserve.
 
 
-func _apply_flux(a: int, b: int, raw: float) -> void:
-	var donor := a if raw > 0 else b
-	var f := raw * minf(1.0, depth[donor] * config.donor_fraction / maxf(outgoing[donor], 1e-20))
-	delta[a] -= f
-	delta[b] += f
+func save_state(path: String) -> Error:
+	var interventions: Array[Dictionary] = []
+	for barrier in barriers:
+		interventions.append(
+			{
+				"id": barrier.barrier_id,
+				"start": barrier.start,
+				"end": barrier.end,
+				"crest": barrier.crest
+			}
+		)
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return FileAccess.get_open_error()
+	file.store_var(
+		{
+			"version": 1,
+			"native": native.snapshot(),
+			"raining": raining,
+			"barriers": interventions,
+			"land_seed": config.seed,
+			"extent_m": config.extent
+		}
+	)
+	file.flush()
+	return file.get_error()
+
+
+func load_state(path: String) -> bool:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return false
+	var state: Variant = file.get_var()
+	if (
+		not state is Dictionary
+		or state.get("version") != 1
+		or state.get("land_seed") != config.seed
+		or state.get("extent_m") != config.extent
+		or not state.get("barriers") is Array
+		or not state.get("raining") is bool
+	):
+		return false
+	var saved: Dictionary = state.get("native", {})
+	var current: Dictionary = native.snapshot()
+	if (
+		saved.get("n") != resolution
+		or saved.get("dx") != cell_size
+		or saved.get("options") != current.options
+	):
+		return false
+	var restored_barriers: Array[ForestBarrier] = []
+	for entry in state.barriers:
+		if (
+			not entry is Dictionary
+			or not entry.get("start") is Vector2
+			or not entry.get("end") is Vector2
+			or not entry.get("crest") is float
+			or not entry.has("id")
+		):
+			return false
+		var barrier := ForestBarrier.new()
+		barrier.barrier_id = entry.id
+		barrier.start = entry.start
+		barrier.end = entry.end
+		barrier.crest = entry.crest
+		restored_barriers.append(barrier)
+	if not native.restore(saved):
+		return false
+	barriers = restored_barriers
+	bed = saved.bed
+	crest_x = saved.crest_x
+	crest_z = saved.crest_z
+	raining = state.raining
+	sync_fields()
+	return true
 
 
 func index_at(x: float, z: float) -> int:

@@ -2,16 +2,22 @@ shader_type spatial;
 render_mode cull_disabled;
 varying vec3 world_pos;
 uniform sampler2D depth_map : filter_linear;
+uniform sampler2D previous_depth_map : filter_linear;
 uniform sampler2D bed_map : filter_linear;
+uniform float display_alpha = 1.0;
 uniform float world_extent = 512.0;
+float display_depth(vec2 uv) {
+	return mix(textureLod(previous_depth_map, uv, 0.0).r,
+		textureLod(depth_map, uv, 0.0).r, display_alpha);
+}
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	vec2 uv = world_pos.xz / world_extent;
-	VERTEX.y = textureLod(bed_map, uv, 0.0).r + textureLod(depth_map, uv, 0.0).r + .045;
+	VERTEX.y = textureLod(bed_map, uv, 0.0).r + display_depth(uv) + .045;
 	world_pos.y = VERTEX.y;
 }
 void fragment() {
-	float depth = texture(depth_map, world_pos.xz / world_extent).r;
+	float depth = display_depth(world_pos.xz / world_extent);
 	if (depth < 0.035) discard;
 	vec2 p = world_pos.xz;
 	float ripple = sin(p.x*1.1 + p.y*.45 + TIME*1.4) * sin(p.y*1.6 - TIME*1.1);

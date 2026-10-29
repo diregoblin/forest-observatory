@@ -61,7 +61,7 @@ func configure(settings: ForestSettings) -> void:
 	pause_button = _button(v, "Пауза", func(): pause_requested.emit())
 	var speeds := HBoxContainer.new()
 	v.add_child(speeds)
-	for s in [1, 2, 8]:
+	for s in [1, 8, 60, 600]:
 		var b := _button(speeds, "×" + str(s), func(): speed_requested.emit(float(s)))
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	v.add_child(HSeparator.new())
@@ -132,10 +132,27 @@ func refresh(
 	water: ForestWatershed,
 	vegetation: ForestVegetation,
 	groundcover: ForestGroundcover,
-	barrier_enabled: bool
+	barrier_enabled: bool,
+	requested_speed := 2.0,
+	achieved_speed := 0.0
 ) -> void:
-	info.text = "Модельное время  %05.1f\nВода в долине  %d м³" % [water.clock, water.volume()]
-	weather_label.text = "Дождь идёт" if water.raining else "Переменная облачность"
+	info.text = (
+		"Время  %02d:%02d:%02d\nПоверхность  %d м³\nВ почве  %d м³\nТемп ×%.0f · факт ×%.1f"
+		% [
+			int(water.clock / 3600),
+			int(water.clock / 60) % 60,
+			int(water.clock) % 60,
+			water.volume(),
+			water.soil_volume,
+			requested_speed,
+			achieved_speed
+		]
+	)
+	weather_label.text = (
+		"Дождь  %.0f мм/ч" % (water.config.rainfall_m_s * 3600000.0)
+		if water.raining
+		else "Переменная облачность"
+	)
 	plant_label.text = "%d деревьев · рост травы %d" % [vegetation.tree_count, groundcover.ticks]
 
 	rain_button.text = "Дождь · ВКЛ" if water.raining else "Дождь · ВЫКЛ"

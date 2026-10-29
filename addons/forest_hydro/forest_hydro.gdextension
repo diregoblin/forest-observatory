@@ -1,0 +1,8 @@
+[configuration]
+entry_symbol = "forest_hydro_init"
+compatibility_minimum = "4.5"
+reloadable = false
+
+[libraries]
+linux.debug.x86_64 = "res://addons/forest_hydro/bin/libforest_hydro.so"
+linux.release.x86_64 = "res://addons/forest_hydro/bin/libforest_hydro.so"

@@ -6,3 +6,9 @@ artifacts/*.log
 artifacts/*.png
 artifacts/*.json
 artifacts/*.import
+artifacts/*.bin
+native/build*/
+native/deps/
+native/api/
+.preview-tools/
+addons/forest_hydro/bin/

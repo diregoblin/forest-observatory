@@ -45,10 +45,10 @@ func _initialize() -> void:
 		)
 	var plants_a := ForestGroundcover.new(water)
 	var plants_b := ForestGroundcover.new(water)
-	plants_a.step(10, water)
-	for i in 20:
+	plants_a.step(180, water)
+	for i in 360:
 		plants_b.step(.5, water)
-	assert(plants_a.ticks == plants_b.ticks)
+	assert(plants_a.ticks == 3 and plants_a.ticks == plants_b.ticks)
 	assert(plants_a.biomass == plants_b.biomass, "ecology independent of frame partition")
 	var report := {
 		"passed": true,
