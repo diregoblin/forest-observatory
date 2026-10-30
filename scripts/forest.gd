@@ -7,6 +7,8 @@ var land := ForestLandscape.new(settings)
 var water := ForestWatershed.new(land)
 var groundcover := ForestGroundcover.new(water)
 var trees := ForestTrees.new(land)
+var fungi := ForestFungi.new(water)
+var fungi_view := ForestFungiView.new()
 var barrier := land.channel_barrier()
 var barrier_enabled := false
 var terrain := ForestTerrainView.new()
@@ -41,6 +43,7 @@ var accelerated_start_clock := 0.0
 var season_preview := 0
 var paused_before_preview := false
 var cycle_check := false
+var fungi_check := false
 
 
 func _ready() -> void:
@@ -56,6 +59,8 @@ func _ready() -> void:
 			settings.ecology_day_s = 20.0
 			settings.ecology_year_s = 60.0
 			settings.ecology_step_s = .1
+		if arg == "--fungi-check":
+			fungi_check = true
 	settings.validate()
 	add_child(camera)
 	camera.configure(land, barrier)
@@ -68,6 +73,8 @@ func _ready() -> void:
 	vegetation.build(land, water, groundcover, trees)
 	vegetation.refresh_plants()
 	vegetation.refresh_trees(_display_climate())
+	add_child(fungi_view)
+	fungi_view.configure(fungi)
 	atmosphere.set_season(_display_climate())
 	add_child(water_view)
 	water_view.configure(water)
@@ -75,14 +82,20 @@ func _ready() -> void:
 	dam_view.configure(barrier, settings.dam_height)
 	add_child(hud)
 	hud.configure(settings)
+	hud.configure_fungi(fungi)
 	hud.rain_requested.connect(_toggle_rain)
 	hud.dam_requested.connect(_toggle_dam)
 	hud.pause_requested.connect(_toggle_pause)
 	hud.speed_requested.connect(_set_speed)
-	hud.view_requested.connect(camera.view)
+	hud.view_requested.connect(_view)
 	hud.season_requested.connect(_cycle_season)
 	_refresh_hud()
 	camera.view(1)
+	if fungi_check:
+		paused = true
+		hud.set_paused(true)
+		_view(4)
+		hud.toggle_fungi_map()
 	print(
 		"FOREST_READY Redot=",
 		Engine.get_version_info().string,
@@ -131,6 +144,8 @@ func _process(dt: float) -> void:
 		vegetation_accum = 0
 		vegetation.refresh_plants()
 		vegetation.refresh_trees(_display_climate())
+		fungi.sync_fields()
+		fungi_view.refresh()
 		atmosphere.set_season(_display_climate())
 		_refresh_hud()
 	if capture_dir != "":
@@ -147,6 +162,7 @@ func _advance_ecology(dt: float) -> void:
 		var tick_started := Time.get_ticks_usec()
 		trees.step(biological_dt, water, maxf(0, water.clock - trees.water_elapsed_s))
 		ecology_usec += Time.get_ticks_usec() - tick_started
+		fungi.step(biological_dt, water, ecology_clock.sample())
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -159,6 +175,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			camera.view(2)
 		KEY_3:
 			camera.view(3)
+		KEY_4:
+			_view(4)
 		KEY_R:
 			_toggle_rain()
 		KEY_B:
@@ -171,6 +189,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			_cycle_season()
 		KEY_M:
 			hud.toggle_map()
+		KEY_G:
+			hud.toggle_fungi_map()
+
+
+func _view(index: int) -> void:
+	if index == 4:
+		camera.view_plot(fungi.observation_center())
+	else:
+		camera.view(index)
 
 
 func _toggle_rain() -> void:
@@ -246,6 +273,7 @@ func _refresh_hud() -> void:
 		_display_climate(),
 		season_preview != 0
 	)
+	hud.refresh_fungi(fungi_view)
 
 
 func _set_speed(value: float) -> void:
@@ -258,6 +286,21 @@ func _set_speed(value: float) -> void:
 
 func _capture_sequence() -> void:
 	if capture_pending:
+		return
+	if fungi_check:
+		if total_wall > 3 and capture_step == 0:
+			await _save_frame("fungi-01-ground.png")
+			capture_step = 1
+		elif total_wall > 5 and capture_step == 1:
+			var center := fungi.observation_center()
+			var target := Vector3(center.x, land.height_at(center.x, center.y), center.y)
+			camera.position = target + Vector3(0, 21, 10)
+			camera.look_at(target)
+			await _save_frame("fungi-02-overview.png")
+			capture_step = 2
+		elif total_wall > 7 and capture_step == 2:
+			_write_report("fungi-runtime.json")
+			get_tree().quit()
 		return
 	if cycle_check:
 		_capture_time_cycle()
@@ -371,6 +414,9 @@ func _write_report(filename: String) -> void:
 		"tree_age_0": trees.age_years[0],
 		"living_trees": trees.alive.count(1),
 		"tree_deaths": trees.deaths,
+		"fungi": fungi.metrics(),
+		"fungal_bodies": fungi_view.body_count,
+		"fungal_groups": fungi_view.group_count,
 		"tree_transpired_m3": trees.transpired_m3,
 		"calendar": _display_climate(),
 		"ecology_clock": ecology_clock.snapshot(),
@@ -402,6 +448,8 @@ func _write_report(filename: String) -> void:
 	f.store_string(JSON.stringify(report, "  "))
 	var saved := water.save_state(dest.trim_suffix(".json") + ".water.bin")
 	assert(saved == OK)
+	var fungal_file := FileAccess.open(dest.trim_suffix(".json") + ".fungi.bin", FileAccess.WRITE)
+	fungal_file.store_var(fungi.snapshot())
 
 
 func _check_controls() -> void:
@@ -438,9 +486,11 @@ func _check_controls() -> void:
 	var paused_water: Dictionary = water.native.snapshot()
 	var paused_clock := ecology_clock.snapshot()
 	var paused_trees := trees.snapshot()
+	var paused_fungi := fungi.snapshot()
 	_process(2)
 	assert(water.native.snapshot() == paused_water and trees.snapshot() == paused_trees)
 	assert(ecology_clock.snapshot() == paused_clock, "pause freezes both independent clocks")
+	assert(fungi.snapshot() == paused_fungi, "pause freezes fungal carbon and time")
 	_toggle_pause()
 	var key := InputEventKey.new()
 	key.physical_keycode = KEY_B
@@ -452,6 +502,7 @@ func _check_controls() -> void:
 	var model_before: Dictionary = water.native.snapshot()
 	var trees_before: Dictionary = trees.snapshot()
 	var clock_before := ecology_clock.snapshot()
+	var fungi_before := fungi.snapshot()
 	for i in 5:
 		hud.season_requested.emit()
 		assert(season_preview == (i + 1) % 5)
@@ -463,6 +514,7 @@ func _check_controls() -> void:
 			water.native.snapshot() == model_before
 			and trees.snapshot() == trees_before
 			and ecology_clock.snapshot() == clock_before
+			and fungi.snapshot() == fungi_before
 		),
 		"season preview does not age trees or alter water"
 	)
@@ -470,6 +522,23 @@ func _check_controls() -> void:
 	assert(hud.hydro_map.visible)
 	hud.toggle_map()
 	assert(not hud.hydro_map.visible)
+	hud.toggle_fungi_map()
+	assert(hud.fungi_map.visible)
+	hud.toggle_fungi_map()
+	assert(not hud.fungi_map.visible)
+	hud.view_requested.emit(4)
+	assert(
+		(
+			camera.position.distance_to(
+				Vector3(
+					fungi.observation_center().x,
+					land.height_at(fungi.observation_center().x, fungi.observation_center().y),
+					fungi.observation_center().y
+				)
+			)
+			< 20
+		)
+	)
 	var file := FileAccess.open("res://artifacts/controls.json", FileAccess.WRITE)
 	file.store_string(
 		JSON.stringify(

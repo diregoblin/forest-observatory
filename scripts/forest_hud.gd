@@ -19,6 +19,8 @@ var season_button: Button
 var calendar_label: Label
 var hydro_map := ForestHydrologyMap.new()
 var map_legend: Label
+var fungi_map := ForestFungiMap.new()
+var fungi_label: Label
 var notices: Array[String] = ["Исток питает ручей. Долина просыпается."]
 
 
@@ -50,17 +52,18 @@ func configure(settings: ForestSettings) -> void:
 	style.set_corner_radius_all(7)
 	style.content_margin_left = 19
 	style.content_margin_right = 19
-	style.content_margin_top = 19
-	style.content_margin_bottom = 19
+	style.content_margin_top = 14
+	style.content_margin_bottom = 14
 	panel.add_theme_stylebox_override("panel", style)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 7)
+	v.add_theme_constant_override("separation", 4)
 	panel.add_child(v)
 	_label(v, "НАБЛЮДЕНИЕ", 12, Color(.70, .76, .60))
 	info = _label(v, "", 15, Color(.93, .94, .83))
 	calendar_label = _label(v, "", 14, Color(.85, .89, .74))
 	weather_label = _label(v, "", 14, Color(.79, .84, .74))
 	plant_label = _label(v, "", 14, Color(.79, .84, .74))
+	fungi_label = _label(v, "", 14, Color(.89, .80, .61))
 	v.add_child(HSeparator.new())
 	rain_button = _button(v, "Дождь · ВЫКЛ", func(): rain_requested.emit())
 	dam_button = _button(v, "Преграда · НЕТ", func(): dam_requested.emit())
@@ -74,15 +77,17 @@ func configure(settings: ForestSettings) -> void:
 	v.add_child(diagnostics)
 	season_button = _button(diagnostics, "Сезоны · T", func(): season_requested.emit())
 	_button(diagnostics, "Вода · M", toggle_map)
+	_button(v, "Мицелий / питание · G", toggle_fungi_map)
 	v.add_child(HSeparator.new())
 	_label(v, "ТОЧКИ НАБЛЮДЕНИЯ", 12, Color(.70, .76, .60))
 	_button(v, "1   Над кронами", func(): view_requested.emit(1))
 	_button(v, "2   У ручья", func(): view_requested.emit(2))
 	_button(v, "3   У преграды", func(): view_requested.emit(3))
+	_button(v, "4   Грибная поляна", func(): view_requested.emit(4))
 	var footer := Label.new()
 	footer.text = (
 		"ПКМ + WASD — полёт   ·   Q/E — высота   ·   Shift — быстрее"
-		+ "\nR дождь   ·   B преграда   ·   T просмотр сезонов   ·   M карта воды   ·   F панель"
+		+ "\nR дождь · B преграда · T сезоны · M вода · G мицелий · 4 грибы · F панель"
 	)
 	footer.add_theme_font_size_override("font_size", 14)
 	footer.add_theme_color_override("font_color", Color(.90, .92, .82))
@@ -219,6 +224,32 @@ func refresh(
 func toggle_map() -> void:
 	hydro_map.visible = not hydro_map.visible
 	map_legend.visible = hydro_map.visible
+	if hydro_map.visible:
+		fungi_map.visible = false
+
+
+func configure_fungi(fungi: ForestFungi) -> void:
+	add_child(fungi_map)
+	fungi_map.configure(fungi)
+
+
+func toggle_fungi_map() -> void:
+	fungi_map.visible = not fungi_map.visible
+	if fungi_map.visible:
+		hydro_map.visible = false
+		map_legend.visible = false
+		fungi_map.refresh()
+
+
+func refresh_fungi(view: ForestFungiView) -> void:
+	fungi_label.text = (
+		"%d грибов · %d групп\nМицелий: %d участка почвы"
+		% [view.body_count, view.group_count, view.model.plots.size()]
+	)
+	if view.model.metrics().boundary_affected:
+		fungi_label.text += "\nФронт достиг границы участка"
+	if fungi_map.visible:
+		fungi_map.refresh()
 
 
 func set_paused(paused: bool) -> void:

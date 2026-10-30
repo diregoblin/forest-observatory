@@ -35,6 +35,13 @@ extends Resource
 @export var flood_tolerance := .15
 @export var flood_biomass := .03
 @export var growth_per_tick := .018
+@export var fungus: ForestFungusDefinition = preload("res://data/fungi/fairy_ring.tres")
+@export var fungi_resolution := 128
+@export var fungi_cell_m := .25
+@export var fungi_plot_centers := PackedVector2Array(
+	[Vector2(.375, .557), Vector2(.70, .30), Vector2(.20, .78)]
+)
+@export var fungi_initial_age_s := 120.0 * 30.0 * 86400.0
 @export var plants: Array[Resource] = []
 
 
@@ -53,6 +60,12 @@ func validate() -> void:
 	assert(start_day >= 1 and start_day < 366 and absf(latitude_deg) < 89)
 	assert(dam_fraction > 0 and dam_fraction < 1 and dam_width > 0)
 	assert(not plants.is_empty())
+	fungus.validate()
+	assert(fungi_resolution >= 16 and fungi_resolution <= 512 and fungi_cell_m > 0)
+	assert(fungi_resolution * fungi_cell_m <= extent and fungi_initial_age_s >= 0)
+	assert(not fungi_plot_centers.is_empty())
+	for center in fungi_plot_centers:
+		assert(center.x >= 0 and center.x <= 1 and center.y >= 0 and center.y <= 1)
 	var identities := {}
 	for plant in plants:
 		assert(plant is ForestPlantDefinition and plant.weight > 0)

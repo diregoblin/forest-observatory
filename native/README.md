@@ -32,6 +32,7 @@ cmake -S native -B native/build-core -DFOREST_EXTENSION=OFF -DCMAKE_BUILD_TYPE=R
 cmake --build native/build-core
 native/build-core/hydro_checks
 native/build-core/hydro_checks --benchmark
+native/build-core/fungi_checks
 ```
 
 ## Numerical contract
@@ -135,6 +136,36 @@ water ripples/shoreline reconstruction and the point inspector. GPU computation
 has not been implemented. Soil rates and climate are plausible scenario inputs,
 not field measurements or validated ecological parameters.
 
+## Fungal soil plots
+
+`Fungi` (`fungi.hpp/.cpp`) is a separate native float64 model sharing the existing
+extension build, not hydrology state. `ForestFungiNative` exposes batch forcing,
+fields, metrics and atomic version-1 snapshots. Four areal carbon stores use
+kg C/m²: available resource, mycelium, finite organic reserve, fruiting biomass.
+Only resource and biomass diffuse. The positive five-point stencil has reflecting
+boundaries and `dt <= .225 dx²/max(D)`. Reaction substeps limit resource turnover;
+first-order losses/transfers use exponential fractions. All uptake and transfers
+are donor-bounded, not repaired by clipping the final pools.
+
+The paper-reference mode uses unlimited signed resource exchange, fruiting off,
+and c2/c1=1. The forest mode replaces that exchange with transfers to/from the
+finite organic reserve, and adds environmentally gated B→fruit→organic transfers.
+Both modes account for carbon, with external exchange/respiration in the ledger.
+Default yield=1 has no respiratory loss; this intentionally matches the chosen
+paper kinetics, not a calibrated ecosystem carbon-use efficiency.
+
+The resource is a lumped available carbon substrate, **not mineral nitrogen or
+phosphorus**. Vegetation does not yet donate litter or compete for this pool.
+Moisture is read-only coarse-grid forcing, not fungal water uptake. Biological
+seconds follow the existing independent ecosystem clock, not water speed.
+
+`fungi_checks` covers the independently calculated homogeneous paper RHS,
+no-inoculum and no-resource nulls, no-spread counterexample, diffusion/carbon
+conservation, finite-resource exhaustion, fruit transfer, mesh/timestep sensitivity
+and CPU cost. `check_fungi.gd` checks the extension, exact continuation, invalid
+restore atomicity, dry suppression and view/state separation.
+See [dated equations, parameters, results and limits](../verification/2026-10-30-fungi.md).
+
 ## References and attribution
 
 - [Bates et al. 2010](https://doi.org/10.1016/j.jhydrol.2010.03.027), simple
@@ -150,3 +181,8 @@ not field measurements or validated ecological parameters.
 - [Landlab GroundwaterDupuitPercolator source](https://github.com/landlab/landlab/blob/master/src/landlab/components/groundwater/dupuit_percolator.py):
   maintained Boussinesq/Dupuit reference inspected before the bounded native model.
   Not executed or imported; our saturation-excess coupling is simpler.
+
+- [Karst, Dralle & Thompson (2016), PLoS ONE 11(3):e0149254](https://doi.org/10.1371/journal.pone.0149254),
+  CC BY: biomass–resource equations and Gray–Scott correspondence. Equation MathML
+  and Figure 3 parameter values were read from the publisher's manuscript XML.
+  No figure pixels or third-party implementation were copied into the game.

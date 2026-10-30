@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <numeric>
 
 using namespace godot;
 namespace {
@@ -171,8 +172,12 @@ public:
         core=std::move(candidate); return true;
     }
 };
+#include "fungi_extension.hpp"
 void initialize_forest_hydro(ModuleInitializationLevel level) {
-    if(level==MODULE_INITIALIZATION_LEVEL_SCENE) GDREGISTER_CLASS(ForestHydroNative);
+    if(level==MODULE_INITIALIZATION_LEVEL_SCENE) {
+        GDREGISTER_CLASS(ForestHydroNative);
+        GDREGISTER_CLASS(ForestFungiNative);
+    }
 }
 void terminate_forest_hydro(ModuleInitializationLevel) {}
 extern "C" GDExtensionBool GDE_EXPORT forest_hydro_init(GDExtensionInterfaceGetProcAddress get_proc,

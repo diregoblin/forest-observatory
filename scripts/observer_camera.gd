@@ -68,3 +68,13 @@ func view(n: int) -> void:
 	self.look_at(target)
 	yaw = self.rotation.y
 	pitch = self.rotation.x
+
+
+func view_plot(center: Vector2) -> void:
+	var target := Vector3(center.x, land.height_at(center.x, center.y) + .15, center.y)
+	self.position = Vector3(
+		center.x + 4.5, land.height_at(center.x + 4.5, center.y + 8.5) + 2.3, center.y + 8.5
+	)
+	self.look_at(target)
+	yaw = self.rotation.y
+	pitch = self.rotation.x

@@ -21,6 +21,11 @@ engine installations, services, user saves, or other projects for this work.
   it owns model state, not presentation logic. See DEVELOPMENT_PLAN.md.
   On the current CPU path, display-only float64 -> float32 conversion remains
   centralized in `ForestFieldTexture` and never changes authoritative reserves.
+- Fungal plots are isolated reflecting domains, not camera-triggered tiles.
+  Preserve the distinction between source biomass/resource kinetics and our
+  finite-organic/fruiting extensions. Grid step resolves colony fronts, not caps.
+  Carbon stores are kg C/m²; representative bodies/clumps never own or spend mass.
+  Fungi use the ecosystem clock and read hydrological forcing without changing it.
 - Current native water is a local-inertial approximation with a declared
   Froude limiter and bucket soil, not full shallow-water equations or an exact
   Landlab port. Conservation is a numerical check, not physical validation.
