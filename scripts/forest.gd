@@ -127,6 +127,8 @@ func _process(dt: float) -> void:
 			simulation_steps += 1
 			accumulator -= settings.water_step
 		_advance_ecology(dt)
+	# Lighting is presentation: sample between model ticks at render cadence.
+	atmosphere.set_season(_display_climate())
 	speed_window_wall += dt
 	if speed_window_wall >= 0.5:
 		achieved_speed = (water.clock - speed_window_clock) / speed_window_wall
@@ -138,7 +140,6 @@ func _process(dt: float) -> void:
 		render_accum = fmod(render_accum, settings.water_display_interval_s)
 		water.sync_fields()
 		water_view.refresh()
-		atmosphere.set_season(_display_climate())
 	vegetation_accum += dt
 	if vegetation_accum >= .5:
 		vegetation_accum = 0
@@ -146,7 +147,6 @@ func _process(dt: float) -> void:
 		vegetation.refresh_trees(_display_climate())
 		fungi.sync_fields()
 		fungi_view.refresh()
-		atmosphere.set_season(_display_climate())
 		_refresh_hud()
 	if capture_dir != "":
 		_capture_sequence()
@@ -240,7 +240,7 @@ func _display_climate() -> Dictionary:
 	if season_preview != 0:
 		var day: float = [0, 20, 125, 200, 275][season_preview]
 		return ForestClimate.sample(0, day, settings.latitude_deg)
-	return ecology_clock.sample()
+	return ecology_clock.presentation_sample()
 
 
 func _cycle_season() -> void:

@@ -32,9 +32,22 @@ func biological_step_s() -> float:
 
 
 func sample() -> Dictionary:
-	var hour := fposmod(settings.start_hour + 24.0 * elapsed_s / settings.ecology_day_s, 24.0)
+	return _sample_at(elapsed_s)
+
+
+func presentation_sample() -> Dictionary:
+	# Interpolate the last completed interval, one fixed tick behind the model.
+	# Never extrapolate through unserved simulation debt or mutate model time.
+	var display_s := maxf(
+		0.0, elapsed_s - settings.ecology_step_s + minf(pending_s, settings.ecology_step_s)
+	)
+	return _sample_at(display_s)
+
+
+func _sample_at(time_s: float) -> Dictionary:
+	var hour := fposmod(settings.start_hour + 24.0 * time_s / settings.ecology_day_s, 24.0)
 	return ForestClimate.sample(
-		elapsed_s * ForestClimate.YEAR_S / settings.ecology_year_s,
+		time_s * ForestClimate.YEAR_S / settings.ecology_year_s,
 		settings.start_day,
 		settings.latitude_deg,
 		hour

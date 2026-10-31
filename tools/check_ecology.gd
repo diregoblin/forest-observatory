@@ -60,6 +60,7 @@ func tick(world: Dictionary, days: float) -> void:
 
 func _initialize() -> void:
 	_check_split_clocks()
+	_check_presentation_clock()
 	var base: ForestSettings = CONFIG
 	var deciduous: ForestPlantDefinition = base.plants[1]
 	var evergreen: ForestPlantDefinition = base.plants[0]
@@ -142,6 +143,7 @@ func _initialize() -> void:
 		"water_tempo_does_not_scale_biological_age": true,
 		"uptake_uses_hydrological_seconds": true,
 		"solar_noon_midnight_and_horizon": true,
+		"solar_presentation_continuous_read_only_and_bounded": true,
 		"shorter_crown_shaded": true,
 		"flood_deaths": flooded.trees.deaths,
 		"coupled_save_resume_exact": true,
@@ -171,6 +173,44 @@ func _check_canopy_definition(trees: ForestTrees) -> void:
 func _drain_clock(clock: ForestEcologyClock) -> void:
 	while clock.step():
 		pass
+
+
+func _check_presentation_clock() -> void:
+	var settings: ForestSettings = CONFIG.duplicate(true)
+	var clock := ForestEcologyClock.new(settings)
+	clock.request(1.0)
+	_drain_clock(clock)
+	var previous: float = clock.presentation_sample().hour
+	var previous_fixed: float = clock.sample().hour
+	var fixed_stalls := 0
+	# Full day, including midnight: every 25 ms frame advances 0.01 solar hours.
+	for frame in 2400:
+		clock.request(.025)
+		_drain_clock(clock)
+		var before := clock.snapshot()
+		var visible := clock.presentation_sample()
+		var delta := fposmod(visible.hour - previous, 24.0)
+		assert(absf(delta - .01) < 1e-9, "no plateaus or tick-boundary jumps, even at midnight")
+		assert(clock.snapshot() == before, "display sampling cannot advance ecology")
+		if clock.sample().hour == previous_fixed:
+			fixed_stalls += 1
+		previous = visible.hour
+		previous_fixed = clock.sample().hour
+	assert(fixed_stalls > 2000, "old fixed-step sampling fails the same smoothness criterion")
+	var frozen := clock.presentation_sample()
+	var resumed := ForestEcologyClock.new(settings)
+	assert(resumed.restore(clock.snapshot()))
+	for frame in 20:
+		assert(clock.presentation_sample() == frozen, "no requested time means a frozen display")
+		assert(resumed.presentation_sample() == frozen, "partial phase survives restore exactly")
+	# Unserved time is not permission for the view to run ahead of the simulation.
+	clock.request(3.0)
+	var debt_before := clock.snapshot()
+	assert(clock.presentation_sample() == clock.sample(), "display is bounded by completed time")
+	assert(clock.snapshot() == debt_before)
+	var fresh := ForestEcologyClock.new(settings)
+	fresh.request(.25)
+	assert(fresh.presentation_sample() == fresh.sample(), "startup never displays negative time")
 
 
 func _check_split_clocks() -> void:
