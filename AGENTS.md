@@ -21,6 +21,16 @@ engine installations, services, user saves, or other projects for this work.
   it owns model state, not presentation logic. See DEVELOPMENT_PLAN.md.
   On the current CPU path, display-only float64 -> float32 conversion remains
   centralized in `ForestFieldTexture` and never changes authoritative reserves.
+- All plant life forms share `ForestTrees`, stable append-only IDs, finite seeds,
+  live/dead C/N/P and one `harvest`/`inspect` interface. Groundcover is derived,
+  never an independent food reserve. Animals use resource definitions as well.
+- `ForestSoil` is the only soil C/N/P owner. Refinement transfers covered coarse
+  reserves into non-overlapping fine patches. Coupled fungal resource/litter
+  fields are read-only mirrors and excluded from ecosystem totals; snapshots
+  must project the current owner, not stale solver caches.
+- Picking uses one observer and the view's last submitted geometry, not future
+  model transforms. Whole-world load validates scene/cross-model contracts and
+  restores participants transactionally in dependency order.
 - Fungal plots are isolated reflecting domains, not camera-triggered tiles.
   Preserve the distinction between source biomass/resource kinetics and our
   finite-organic/fruiting extensions. Grid step resolves colony fronts, not caps.

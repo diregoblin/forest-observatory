@@ -4,6 +4,7 @@ extends RefCounted
 ## Independent, always-active isolated observation plots, NOT a tiled whole forest.
 ## Carbon pools are authoritative in native float64. Water is read-only forcing.
 var land: ForestLandscape
+var soil: ForestSoil
 var plots: Array[Dictionary] = []
 var elapsed_s := 0.0
 var ticks := 0
@@ -11,8 +12,9 @@ var step_usec := 0
 var revision := 0  # Display invalidation only; not a biological state variable.
 
 
-func _init(water: ForestWatershed) -> void:
+func _init(water: ForestWatershed, shared_soil: ForestSoil = null) -> void:
 	land = water.landscape
+	soil = shared_soil
 	var config := land.settings
 	var n := config.fungi_resolution
 	var dx := config.fungi_cell_m
@@ -24,6 +26,8 @@ func _init(water: ForestWatershed) -> void:
 			clampf(center.x - size / 2, 0, config.extent - size),
 			clampf(center.y - size / 2, 0, config.extent - size)
 		)
+		if soil != null:
+			origin = (origin / dx).round() * dx
 		var b := PackedFloat64Array()
 		var r := PackedFloat64Array()
 		var litter := PackedFloat64Array()
@@ -75,6 +79,10 @@ func _init(water: ForestWatershed) -> void:
 			initial.biomass[k] -= transfer
 			initial.fruit[k] += transfer
 		_require(core.restore(initial))
+		if soil != null:
+			var patch: int = soil.native.add_patch(n, dx, origin.x, origin.y)
+			_require(patch >= 0)
+			_require(core.bind_soil(soil.native, patch))
 		plots.append(
 			{"origin": origin, "native": core, "fields": core.fields(), "metrics": core.metrics()}
 		)
@@ -152,6 +160,10 @@ func restore(state: Dictionary) -> bool:
 		var core := ForestFungiNative.new()
 		if not core.restore(s):
 			return false
+		if soil != null and not core.bind_soil(soil.native, int(s.get("soil_patch", -1)), false):
+			return false
+		if bool(s.get("coupled", false)) != (soil != null):
+			return false
 		candidates.append(
 			{
 				"origin": saved.origin,
@@ -176,7 +188,8 @@ func _configuration() -> Array:
 		c.fungi_plot_centers,
 		c.fungus.options(),
 		c.ecology_step_s,
-		c.year_speed_multiplier
+		c.year_speed_multiplier,
+		soil != null
 	]
 
 
@@ -189,12 +202,18 @@ static func _require(ok: bool) -> void:
 
 func metrics() -> Dictionary:
 	var carbon := 0.0
+	var nitrogen := 0.0
+	var phosphorus := 0.0
+	var respired := 0.0
 	var error := 0.0
 	var edge := 0.0
 	var boundary_affected := false
 	for plot in plots:
 		var m: Dictionary = plot.native.metrics()
 		carbon += m.carbon_kg
+		nitrogen += m.nitrogen_kg
+		phosphorus += m.phosphorus_kg
+		respired += m.respired_kg_c
 		error += absf(m.balance_error_kg)
 		edge += m.edge_biomass_kg
 		boundary_affected = boundary_affected or m.boundary_affected
@@ -203,6 +222,10 @@ func metrics() -> Dictionary:
 		"cells": plots.size() * land.settings.fungi_resolution * land.settings.fungi_resolution,
 		"cell_m": land.settings.fungi_cell_m,
 		"carbon_kg": carbon,
+		"nitrogen_kg": nitrogen,
+		"phosphorus_kg": phosphorus,
+		"respired_kg_c": respired,
+		"soil_pools_excluded": soil != null,
 		"carbon_error_kg": error,
 		"edge_biomass_kg": edge,
 		"boundary_affected": boundary_affected,
@@ -216,3 +239,8 @@ func observation_center() -> Vector2:
 		plots[0].origin
 		+ Vector2.ONE * land.settings.fungi_resolution * land.settings.fungi_cell_m / 2.0
 	)
+
+
+func element_totals() -> Vector3:
+	var m := metrics()
+	return Vector3(m.carbon_kg, m.nitrogen_kg, m.phosphorus_kg)

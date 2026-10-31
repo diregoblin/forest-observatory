@@ -113,8 +113,8 @@ func _initialize() -> void:
 	assert(winter.trees.size == winter_initial and winter.trees.transpired_m3 == 0)
 	# Light control: two co-located crowns, shorter one receives less light.
 	wet.trees.positions[1] = wet.trees.positions[0]
-	wet.trees.size[0] = 1.4
-	wet.trees.size[1] = .5
+	wet.trees.size[0] = 20.0 / wet.settings.plants[wet.trees.species[0]].reference_height_m
+	wet.trees.size[1] = 2.0 / wet.settings.plants[wet.trees.species[1]].reference_height_m
 	wet.trees._update_light()
 	assert(wet.trees.light[0] > wet.trees.light[1])
 	_check_canopy_definition(wet.trees)

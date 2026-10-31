@@ -7,9 +7,12 @@ signal pause_requested
 signal speed_requested(value: float)
 signal view_requested(index: int)
 signal season_requested
+signal save_requested
+signal load_requested
 
 var info: Label
 var journal: Label
+var notes_container: VBoxContainer
 var weather_label: Label
 var plant_label: Label
 var rain_button: Button
@@ -23,6 +26,8 @@ var map_legend: Label
 var fungi_map := ForestFungiMap.new()
 var fungi_label: Label
 var notices: Array[String] = ["Исток питает ручей. Долина просыпается."]
+var observation_panel := ForestObservationPanel.new()
+var animal_label: Label
 
 
 func configure(settings: ForestSettings) -> void:
@@ -65,9 +70,12 @@ func configure(settings: ForestSettings) -> void:
 	weather_label = _label(v, "", 14, Color(.79, .84, .74))
 	plant_label = _label(v, "", 14, Color(.79, .84, .74))
 	fungi_label = _label(v, "", 14, Color(.89, .80, .61))
+	animal_label = _label(v, "", 14, Color(.86, .84, .71))
 	v.add_child(HSeparator.new())
-	rain_button = _button(v, "Дождь · ВЫКЛ", func(): rain_requested.emit())
-	dam_button = _button(v, "Преграда · НЕТ", func(): dam_requested.emit())
+	var weather_controls := HBoxContainer.new()
+	v.add_child(weather_controls)
+	rain_button = _button(weather_controls, "Дождь · ВЫКЛ", func(): rain_requested.emit())
+	dam_button = _button(weather_controls, "Преграда · НЕТ", func(): dam_requested.emit())
 	pause_button = _button(v, "Пауза", func(): pause_requested.emit())
 	var speeds := HBoxContainer.new()
 	v.add_child(speeds)
@@ -94,14 +102,22 @@ func configure(settings: ForestSettings) -> void:
 	_button(v, "Мицелий / питание · G", toggle_fungi_map)
 	v.add_child(HSeparator.new())
 	_label(v, "ТОЧКИ НАБЛЮДЕНИЯ", 12, Color(.70, .76, .60))
-	_button(v, "1   Над кронами", func(): view_requested.emit(1))
-	_button(v, "2   У ручья", func(): view_requested.emit(2))
-	_button(v, "3   У преграды", func(): view_requested.emit(3))
-	_button(v, "4   Грибная поляна", func(): view_requested.emit(4))
+	var views := GridContainer.new()
+	views.columns = 2
+	v.add_child(views)
+	for index in 5:
+		var labels := ["Над кронами", "У ручья", "У преграды", "Грибная поляна", "Заяц"]
+		_button(
+			views, "%d  %s" % [index + 1, labels[index]], func(): view_requested.emit(index + 1)
+		)
+	var saves := HBoxContainer.new()
+	v.add_child(saves)
+	_button(saves, "Сохранить · F5", func(): save_requested.emit())
+	_button(saves, "Загрузить · F9", func(): load_requested.emit())
 	var footer := Label.new()
 	footer.text = (
 		"ПКМ + WASD — полёт   ·   Q/E — высота   ·   Shift — быстрее"
-		+ "\nR дождь · B преграда · T сезоны · M вода · G мицелий · 4 грибы · F панель"
+		+ "\nЛКМ — справка · R дождь · B преграда · T сезоны · M вода · G мицелий · F панель"
 	)
 	footer.add_theme_font_size_override("font_size", 14)
 	footer.add_theme_color_override("font_color", Color(.90, .92, .82))
@@ -112,6 +128,7 @@ func configure(settings: ForestSettings) -> void:
 	footer.offset_bottom = -16
 	root.add_child(footer)
 	var right := VBoxContainer.new()
+	notes_container = right
 	right.anchor_left = 1
 	right.anchor_right = 1
 	right.offset_left = -390
@@ -119,10 +136,13 @@ func configure(settings: ForestSettings) -> void:
 	right.offset_top = 42
 	right.custom_minimum_size = Vector2(340, 0)
 	root.add_child(right)
+	right.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_label(right, "ПОЛЕВЫЕ ЗАМЕТКИ", 12, Color(.85, .86, .68))
 	journal = _label(right, notices[0], 15, Color(.94, .94, .85))
 	journal.custom_minimum_size.x = 320
 	journal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	root.add_child(observation_panel)
+	observation_panel.close_requested.connect(func(): observation_panel.show_record({}))
 	hydro_map.position = Vector2(-296, 340)
 	hydro_map.anchor_left = 1
 	hydro_map.anchor_right = 1
@@ -214,7 +234,10 @@ func refresh(
 	)
 	plant_label.text = "%d деревьев · рост травы %d" % [vegetation.tree_count, groundcover.ticks]
 	if trees != null:
-		plant_label.text = "%d живых деревьев · %d сухостой" % [trees.alive.count(1), trees.deaths]
+		plant_label.text = (
+			"%d живых растений · %d видов"
+			% [trees.alive.count(1), trees.land.settings.plants.size()]
+		)
 	if not climate.is_empty():
 		calendar_label.text = (
 			"Год %d · %s · %s\n%s · %.0f °C · свет %.1f ч\nСутки %s · год %s%s"

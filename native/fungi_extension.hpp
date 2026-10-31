@@ -5,6 +5,7 @@ class ForestFungiNative : public RefCounted {
     GDCLASS(ForestFungiNative,RefCounted);
     forest::Fungi core;
     Dictionary configuration;
+    Ref<ForestSoilNative> soil_owner;
     static forest::FungalParameters parameters(const Dictionary &d) {
         forest::FungalParameters p;
 #define GET(name) p.name=d.get(#name,p.name)
@@ -19,6 +20,7 @@ protected:
     static void _bind_methods() {
         ClassDB::bind_method(D_METHOD("configure","size","cell_m","options","biomass","resource","litter"),&ForestFungiNative::configure);
         ClassDB::bind_method(D_METHOD("advance","seconds"),&ForestFungiNative::advance);
+        ClassDB::bind_method(D_METHOD("bind_soil","soil","patch","reset_ledger"),&ForestFungiNative::bind_soil,DEFVAL(true));
         ClassDB::bind_method(D_METHOD("set_environment","soil","depth","water_size","water_cell_m","origin_x","origin_z","temperature_c"),&ForestFungiNative::set_environment);
         ClassDB::bind_method(D_METHOD("fields"),&ForestFungiNative::fields);
         ClassDB::bind_method(D_METHOD("metrics"),&ForestFungiNative::metrics);
@@ -31,6 +33,9 @@ public:
         forest::Fungi candidate;
         if(!candidate.initialize(n,dx,parameters(options),unpack(b),unpack(r),unpack(l))) return false;
         core=std::move(candidate); configuration=options.duplicate(true); return true;
+    }
+    bool bind_soil(const Ref<ForestSoilNative> &soil,int patch,bool reset=true) {
+        if(soil.is_null()||!core.bind_soil(&soil->core,patch,reset))return false;soil_owner=soil;return true;
     }
     bool advance(double seconds) {return core.advance(seconds);}
     bool set_environment(const PackedFloat64Array &soil,const PackedFloat64Array &depth,
@@ -53,12 +58,29 @@ public:
     }
     Dictionary fields() const {
         Dictionary d;
-        d["biomass"]=pack(core.biomass); d["resource"]=pack(core.resource);
-        d["litter"]=pack(core.litter); d["fruit"]=pack(core.fruit);
+        d["biomass"]=pack(core.biomass); d["fruit"]=pack(core.fruit);
+        // Coupled substrate arrays are solver scratch/mirrors, never state.
+        // Plants/animals may deposit after the last fungal tick. Project the
+        // current authoritative soil into a canonical read-only observation;
+        // do not synchronize/mutate the solver merely to take a checkpoint.
+        if(core.coupled && core.soil && core.soil_patch>=0) {
+            const auto &cells=core.soil->patches[core.soil_patch].cells;
+            std::vector<double> resource(cells.size()),litter(cells.size());
+            const double area=core.dx*core.dx;
+            for(std::size_t k=0;k<cells.size();++k) {
+                resource[k]=cells[k].labile.c/area;
+                litter[k]=cells[k].organic.c/area;
+            }
+            d["resource"]=pack(resource);d["litter"]=pack(litter);
+        } else {
+            d["resource"]=pack(core.resource);d["litter"]=pack(core.litter);
+        }
         return d;
     }
     Dictionary metrics() const {
         Dictionary d;
+        d["respired_kg_c"]=core.respired_kg;d["coupled"]=core.coupled;
+        d["nitrogen_kg"]=core.coupled?core.carbon_kg()/core.cn_ratio:0.0;d["phosphorus_kg"]=core.coupled?core.carbon_kg()/core.cp_ratio:0.0;
         d["time_s"]=core.time_s; d["steps"]=static_cast<int64_t>(core.steps);
         d["carbon_kg"]=core.carbon_kg(); d["balance_error_kg"]=core.balance_error_kg();
         d["input_kg"]=core.input_kg; d["output_kg"]=core.output_kg; d["initial_kg"]=core.initial_kg;
@@ -69,7 +91,7 @@ public:
     }
     Dictionary snapshot() const {
         Dictionary d=fields(); d.merge(metrics()); d["version"]=1; d["n"]=core.n; d["dx"]=core.dx;
-        d["options"]=configuration.duplicate(true);
+        d["options"]=configuration.duplicate(true);d["soil_patch"]=core.soil_patch;d["cn_ratio"]=core.cn_ratio;d["cp_ratio"]=core.cp_ratio;
         d["activity"]=pack(core.activity); d["fruit_suitability"]=pack(core.fruit_suitability);
         return d;
     }
@@ -92,9 +114,13 @@ public:
 #define LOAD(name) if(!d.has(#name)) return false; c.name=d[#name]; if(!std::isfinite(c.name) || c.name<0) return false
         LOAD(time_s); LOAD(initial_kg); LOAD(input_kg); LOAD(output_kg);
 #undef LOAD
+        c.coupled=d.get("coupled",false);c.soil_patch=d.get("soil_patch",-1);c.cn_ratio=d.get("cn_ratio",15.0);c.cp_ratio=d.get("cp_ratio",200.0);c.respired_kg=d.get("respired_kg_c",0.0);
+        if(!std::isfinite(c.cn_ratio)||c.cn_ratio<=0||!std::isfinite(c.cp_ratio)||c.cp_ratio<=0||!std::isfinite(c.respired_kg)||c.respired_kg<0)return false;
+        if(c.coupled&&c.soil_patch<0)return false;
         if(!d.has("steps") || int64_t(d["steps"])<0) return false;
         c.steps=int64_t(d["steps"]);
         if(std::abs(c.balance_error_kg())>1e-8*std::max(1.0,c.initial_kg+c.input_kg)) return false;
+        if(c.coupled&&soil_owner.is_valid()&&!c.bind_soil(&soil_owner->core,c.soil_patch,false))return false;
         core=std::move(c); configuration=Dictionary(d["options"]).duplicate(true); return true;
     }
 };

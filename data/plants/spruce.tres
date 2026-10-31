@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=8 format=3]
+[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=7 format=3]
 [ext_resource type="Script" path="res://scripts/plant_definition.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/plant_module.gd" id="2"]
 [sub_resource type="CylinderMesh" id="TrunkMesh"]
@@ -30,6 +30,22 @@ color = Color(0.105, 0.23, 0.16, 1)
 [resource]
 script = ExtResource("1")
 species_id = &"spruce"
-display_name = "Ель"
-weight = 0.68
+display_name = "Ель обыкновенная"
+latin_name = "Picea abies"
+description = "Вечнозелёное хвойное дерево; теневыносливое и холодостойкое, образует верхний ярус."
+source_url = "https://powo.science.kew.org/results?q=Picea%20abies"
+growth_form = &"tree"
+life_cycle = &"perennial"
+initial_age_years = Vector2(10, 80)
+biomass_kg_c = 50.0
+cn_ratio = 50.0
+cp_ratio = 400.0
+edible_fraction = 0.0
+mature_age_years = 25.0
+seed_cost_kg_c = 0.002
+reproduction_per_year = 0.15
+dispersal_m = 15.0
+germination_fraction = 0.1
+recruitment_light = 0.1
+weight = 0.52
 modules = Array[ExtResource("2")]([SubResource("Trunk"), SubResource("Crown")])

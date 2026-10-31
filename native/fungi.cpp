@@ -19,11 +19,12 @@ bool Fungi::initialize(int size,double cell_m,const FungalParameters &params,
     n=size; dx=cell_m; p=params; biomass=b; resource=r; litter=l;
     fruit.assign(n*n,0); activity.assign(n*n,1); fruit_suitability.assign(n*n,0);
     next_b.resize(n*n); next_r.resize(n*n);
-    time_s=0; input_kg=0; output_kg=0; steps=0; initial_kg=carbon_kg();
+    time_s=0; input_kg=0; output_kg=0; steps=0; coupled=false;soil=nullptr;soil_patch=-1;respired_kg=0;initial_kg=carbon_kg();
     return true;
 }
 bool Fungi::advance(double seconds) {
-    if(n==0 || !std::isfinite(seconds) || seconds<0) return false;
+    if(n==0 || !std::isfinite(seconds) || seconds<0 || (coupled && !soil)) return false;
+    if(coupled)sync_soil_fields();
     double remaining=seconds;
     while(remaining>1e-9) {
         double dt=std::min(remaining,p.max_step_s);
@@ -38,6 +39,7 @@ bool Fungi::advance(double seconds) {
     return finite_state();
 }
 void Fungi::step(double dt) {
+    if(coupled){step_coupled(dt);return;}
     const double db=p.diffusion_b_m2_s*dt/(dx*dx),dr=p.diffusion_r_m2_s*dt/(dx*dx);
     const double mortality=-std::expm1(-p.mortality_s*dt);
     const double replenishment=-std::expm1(-p.replenishment_s*dt);
@@ -76,8 +78,49 @@ void Fungi::step(double dt) {
 }
 double Fungi::carbon_kg() const {
     double sum=0;
-    for(const auto *a:{&biomass,&resource,&litter,&fruit}) sum+=std::accumulate(a->begin(),a->end(),0.0);
+    for(const auto *a:{&biomass,&fruit}) sum+=std::accumulate(a->begin(),a->end(),0.0);
+    if(!coupled)for(const auto *a:{&resource,&litter})sum+=std::accumulate(a->begin(),a->end(),0.0);
     return sum*dx*dx;
+}
+bool Fungi::bind_soil(Soil *owner,int patch,bool reset) {
+    if(!owner||patch<0||patch>=int(owner->patches.size()))return false;
+    const auto &p=owner->patches[patch];if(p.n!=n||p.dx!=dx)return false;
+    soil=owner;soil_patch=patch;coupled=true;sync_soil_fields();
+    if(reset){initial_kg=carbon_kg();input_kg=0;output_kg=0;respired_kg=0;}
+    return true;
+}
+void Fungi::sync_soil_fields() {
+    if(!soil||soil_patch<0)return;
+    const auto &cells=soil->patches[soil_patch].cells;
+    for(int k=0;k<n*n;++k){resource[k]=cells[k].labile.c/(dx*dx);litter[k]=cells[k].organic.c/(dx*dx);}
+}
+void Fungi::step_coupled(double dt) {
+    auto &cells=soil->patches[soil_patch].cells;
+    Elements before;for(const auto &c:cells)before+=c.total();
+    const double db=p.diffusion_b_m2_s*dt/(dx*dx),dr=p.diffusion_r_m2_s*dt/(dx*dx),area=dx*dx;
+    std::vector<Elements> labile(n*n);
+    for(int z=0;z<n;++z)for(int x=0;x<n;++x){
+        int k=z*n+x,a=z*n+std::max(0,x-1),c=z*n+std::min(n-1,x+1),u=std::max(0,z-1)*n+x,v=std::min(n-1,z+1)*n+x;
+        next_b[k]=biomass[k]+db*(biomass[a]+biomass[c]+biomass[u]+biomass[v]-4*biomass[k]);
+        labile[k]=cells[k].labile+(cells[a].labile+cells[c].labile+cells[u].labile+cells[v].labile-cells[k].labile*4)*dr;
+    }
+    biomass.swap(next_b);
+    const double mortality=-std::expm1(-p.mortality_s*dt),replenishment=-std::expm1(-p.replenishment_s*dt),senescence=-std::expm1(-dt/p.fruit_lifetime_s),fruiting=-std::expm1(-dt*p.fruiting_s);
+    for(int k=0;k<n*n;++k){
+        auto &c=cells[k];c.labile=labile[k];
+        double uptake=std::min(c.labile.c,dt*p.uptake_m4_kg2_s*c.labile.c*biomass[k]*biomass[k]*activity[k]);
+        if(p.yield>0){uptake=std::min(uptake,(c.labile.n+c.mineral.n)*cn_ratio/p.yield);uptake=std::min(uptake,(c.labile.p+c.mineral.p)*cp_ratio/p.yield);}
+        c.labile.c-=uptake;const double growth=p.yield*uptake;
+        const double need_n=growth/cn_ratio,need_p=growth/cp_ratio,take_n=std::min(need_n,c.labile.n),take_p=std::min(need_p,c.labile.p);
+        c.labile.n-=take_n;c.mineral.n=std::max(0.0,c.mineral.n-(need_n-take_n));c.labile.p-=take_p;c.mineral.p=std::max(0.0,c.mineral.p-(need_p-take_p));
+        biomass[k]+=growth/area;input_kg+=uptake;const double respiration=uptake-growth;output_kg+=respiration;respired_kg+=respiration;
+        const double dead=biomass[k]*mortality*area;biomass[k]-=dead/area;c.organic+={dead,dead/cn_ratio,dead/cp_ratio};output_kg+=dead;
+        const double refill=std::min(c.organic.c,std::max(0.0,p.resource_capacity_kg_m2*area-c.labile.c)*replenishment);
+        if(c.organic.c>0){const auto moved=c.organic*(refill/c.organic.c);c.organic=c.organic-moved;c.labile+=moved;}
+        const double senesced=fruit[k]*senescence*area;fruit[k]-=senesced/area;c.organic+={senesced,senesced/cn_ratio,senesced/cp_ratio};output_kg+=senesced;
+        const double produced=std::max(0.0,biomass[k]-p.fruit_threshold_kg_m2)*fruiting*fruit_suitability[k];biomass[k]-=produced;fruit[k]+=produced;
+    }
+    Elements after;for(const auto &c:cells)after+=c.total();soil->exchange(after-before);sync_soil_fields();
 }
 double Fungi::balance_error_kg() const {return carbon_kg()+output_kg-initial_kg-input_kg;}
 bool Fungi::finite_state() const {

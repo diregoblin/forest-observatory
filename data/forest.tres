@@ -1,10 +1,17 @@
-[gd_resource type="Resource" script_class="ForestSettings" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="ForestSettings" load_steps=11 format=3]
 [ext_resource type="Script" path="res://scripts/settings.gd" id="1"]
 [ext_resource type="Resource" path="res://data/plants/spruce.tres" id="2"]
 [ext_resource type="Resource" path="res://data/plants/birch.tres" id="3"]
+[ext_resource type="Resource" path="res://data/plants/aspen.tres" id="4"]
+[ext_resource type="Resource" path="res://data/plants/grey_willow.tres" id="5"]
+[ext_resource type="Resource" path="res://data/plants/raspberry.tres" id="6"]
+[ext_resource type="Resource" path="res://data/plants/bilberry.tres" id="7"]
+[ext_resource type="Resource" path="res://data/plants/wood_sorrel.tres" id="8"]
+[ext_resource type="Resource" path="res://data/plants/tufted_hairgrass.tres" id="9"]
+[ext_resource type="Resource" path="res://data/plants/balsam.tres" id="10"]
 [resource]
 script = ExtResource("1")
 initial_speed = 1.0
 day_speed_multiplier = 1440.0
 year_speed_multiplier = 52560.0
-plants = Array[Resource]([ExtResource("2"), ExtResource("3")])
+plants = Array[Resource]([ExtResource("2"), ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("6"), ExtResource("7"), ExtResource("8"), ExtResource("9"), ExtResource("10")])

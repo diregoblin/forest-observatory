@@ -113,7 +113,8 @@ before replacing the running core. Native checkpoint version 2 adds groundwater,
 v1 import retains the old external-drain physics; the world wrapper rejects
 configuration mismatches rather than silently changing saved physics.
 The GDScript file API saves **hydrology only**,
-not camera/plant state or a finished full-world save system.
+not camera/plant state. The separate `ForestWorldState` registry now supplies
+transactional whole-world save/load; do not confuse the two formats.
 
 Rendering samples at 10 wall-Hz and blends the last two depth images each frame;
 the CPU upload image is retained, avoiding texture readback. This interpolation
@@ -186,3 +187,19 @@ See [dated equations, parameters, results and limits](../verification/2026-10-30
   CC BY: biomass–resource equations and Gray–Scott correspondence. Equation MathML
   and Figure 3 parameter values were read from the publisher's manuscript XML.
   No figure pixels or third-party implementation were copied into the game.
+
+## Shared ecosystem soil (2026-10-31)
+
+`soil.hpp/cpp` stores kg C/N/P amounts (not concentrations) in organic, labile
+and mineral pools. The base cells retain only uncovered area after fine-patch
+creation; patch integration is mass-conservative, overlaps are rejected. Native
+soil and fungal calculations remain float64; strict audits sum scalar metrics,
+not float32 `Vector3` display/command values. Soil decay is a declared qualitative
+scenario rule, not a calibrated soil chemistry model.
+
+Coupled fungi exclude mirrored soil pools from their own carbon total. Fungal
+`fields`/snapshots read the current owner even after later plant/animal deposits;
+reading a snapshot never changes solver caches or reserves. Trees/herbs request
+mineral N/P in one proportional batch; between plant/fungal guilds the scene uses
+operator splitting. See `verification/2026-10-31-understory.md` for measured
+order/step sensitivity, whole-world accounting and remaining limitations.

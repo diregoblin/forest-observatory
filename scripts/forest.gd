@@ -1,13 +1,20 @@
 extends Node3D
 
+const WORLD_SAVE := "user://observatory-world-v1.bin"
+
 # Composition root: model owns state, views read it, controls request changes.
 var settings: ForestSettings = load("res://data/forest.tres").duplicate(true)
 var ecology_clock := ForestEcologyClock.new(settings)
 var land := ForestLandscape.new(settings)
 var water := ForestWatershed.new(land)
+var soil := ForestSoil.new(water)
 var groundcover := ForestGroundcover.new(water)
-var trees := ForestTrees.new(land)
-var fungi := ForestFungi.new(water)
+var trees := ForestTrees.new(land, soil)
+var fungi := ForestFungi.new(water, soil)
+var animals := ForestAnimals.new(land, trees, water, soil)
+var animals_view := ForestAnimalsView.new()
+var observation := ForestObservation.new(land)
+var selection_marker := MeshInstance3D.new()
 var fungi_view := ForestFungiView.new()
 var barrier := land.channel_barrier()
 var barrier_enabled := false
@@ -43,6 +50,7 @@ var season_preview := 0
 var paused_before_preview := false
 var cycle_check := false
 var fungi_check := false
+var understory_check := false
 
 
 func _ready() -> void:
@@ -60,7 +68,10 @@ func _ready() -> void:
 			settings.ecology_step_s = .1
 		if arg == "--fungi-check":
 			fungi_check = true
+		if arg == "--understory-check":
+			understory_check = true
 	settings.validate()
+	groundcover.bind_plants(trees)
 	add_child(camera)
 	camera.configure(land, barrier)
 	add_child(atmosphere)
@@ -70,10 +81,25 @@ func _ready() -> void:
 	terrain.configure(land, camera)
 	add_child(vegetation)
 	vegetation.build(land, water, groundcover, trees)
-	vegetation.refresh_plants()
 	vegetation.refresh_trees(_display_climate())
 	add_child(fungi_view)
 	fungi_view.configure(fungi)
+	add_child(animals_view)
+	animals_view.configure(animals)
+	observation.register_group(&"plant", trees, vegetation.selection_shape)
+	observation.register_group(&"animal", animals, animals_view.selection_shape)
+	var ring := TorusMesh.new()
+	ring.inner_radius = .94
+	ring.outer_radius = 1.0
+	ring.rings = 24
+	ring.ring_segments = 8
+	selection_marker.mesh = ring
+	var ring_material := StandardMaterial3D.new()
+	ring_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ring_material.albedo_color = Color(.91, .83, .43)
+	selection_marker.material_override = ring_material
+	selection_marker.visible = false
+	add_child(selection_marker)
 	atmosphere.set_season(_display_climate())
 	add_child(water_view)
 	water_view.configure(water)
@@ -88,6 +114,13 @@ func _ready() -> void:
 	hud.speed_requested.connect(_set_speed)
 	hud.view_requested.connect(_view)
 	hud.season_requested.connect(_cycle_season)
+	hud.save_requested.connect(_save_world)
+	hud.load_requested.connect(_load_world)
+	hud.observation_panel.close_requested.connect(
+		func():
+			observation.selected.clear()
+			_refresh_observation()
+	)
 	_refresh_hud()
 	camera.view(1)
 	if fungi_check:
@@ -95,6 +128,10 @@ func _ready() -> void:
 		hud.set_paused(true)
 		_view(4)
 		hud.toggle_fungi_map()
+	if understory_check:
+		paused = true
+		hud.set_paused(true)
+		_view(5)
 	print(
 		"FOREST_READY Redot=",
 		Engine.get_version_info().string,
@@ -107,6 +144,8 @@ func _ready() -> void:
 	if DisplayServer.get_name() == "headless":
 		if OS.get_cmdline_user_args().has("--check-controls"):
 			_check_controls()
+		if OS.get_cmdline_user_args().has("--check-world"):
+			load("res://tools/check_world.gd").run(self)
 		_write_report("headless-smoke.json")
 		get_tree().quit()
 
@@ -117,6 +156,8 @@ func _process(dt: float) -> void:
 		_advance_world(dt * sim_speed)
 	# Lighting is presentation: sample between model ticks at render cadence.
 	atmosphere.set_season(_display_climate())
+	animals_view.refresh(clampf(ecology_clock.pending_s / settings.ecology_step_s, 0, 1))
+	_refresh_observation()
 	speed_window_wall += dt
 	if speed_window_wall >= 0.5:
 		achieved_speed = (water.clock - speed_window_clock) / speed_window_wall
@@ -131,7 +172,6 @@ func _process(dt: float) -> void:
 	vegetation_accum += dt
 	if vegetation_accum >= .5:
 		vegetation_accum = 0
-		vegetation.refresh_plants()
 		vegetation.refresh_trees(_display_climate())
 		fungi.sync_fields()
 		fungi_view.refresh()
@@ -154,14 +194,24 @@ func _advance_world(dt: float) -> void:
 		simulation_steps += 1
 		water.sync_fields()
 		var biological_dt := ecology_clock.biological_step_s()
-		groundcover.step(biological_dt, water)
+		soil.step(biological_dt, water)
 		tick_started = Time.get_ticks_usec()
 		trees.step(biological_dt, water, maxf(0, water.clock - trees.water_elapsed_s))
 		ecology_usec += Time.get_ticks_usec() - tick_started
 		fungi.step(biological_dt, water, ecology_clock.sample())
+		animals.step(biological_dt)
+		groundcover.step(biological_dt, water)
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		if not camera.moving and Input.mouse_mode == Input.MOUSE_MODE_VISIBLE:
+			observation.rebuild()
+			observation.pick(
+				camera.project_ray_origin(event.position), camera.project_ray_normal(event.position)
+			)
+			_refresh_observation()
+		return
 	if not event is InputEventKey or not event.pressed or event.echo:
 		return
 	match event.physical_keycode:
@@ -173,6 +223,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			camera.view(3)
 		KEY_4:
 			_view(4)
+		KEY_5:
+			_view(5)
+		KEY_F5:
+			_save_world()
+		KEY_F9:
+			_load_world()
 		KEY_R:
 			_toggle_rain()
 		KEY_B:
@@ -190,7 +246,13 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _view(index: int) -> void:
-	if index == 4:
+	if index == 5 and not animals.positions.is_empty():
+		var target: Vector3 = animals.positions[0] + Vector3.UP * .4
+		camera.position = target + Vector3(3.2, 2.2, 4.5)
+		camera.look_at(target)
+		camera.yaw = camera.rotation.y
+		camera.pitch = camera.rotation.x
+	elif index == 4:
 		camera.view_plot(fungi.observation_center())
 	else:
 		camera.view(index)
@@ -270,6 +332,230 @@ func _refresh_hud() -> void:
 		season_preview != 0
 	)
 	hud.refresh_fungi(fungi_view)
+	hud.animal_label.text = "Зайцы: %d · выбери ЛКМ для справки" % animals.alive.count(1)
+	_refresh_observation()
+
+
+func _refresh_observation() -> void:
+	if not is_instance_valid(hud.observation_panel) or not hud.observation_panel.is_inside_tree():
+		return
+	var record := observation.describe()
+	hud.observation_panel.show_record(record)
+	hud.notes_container.visible = record.is_empty()
+	selection_marker.visible = not record.is_empty()
+	if record.is_empty():
+		return
+	var bounds := observation.bounds()
+	var center := bounds.get_center()
+	selection_marker.position = Vector3(
+		center.x, land.height_at(center.x, center.z) + .06, center.z
+	)
+	var radius := maxf(.35, maxf(bounds.size.x, bounds.size.z) * .55)
+	selection_marker.scale = Vector3(radius, .2, radius)
+
+
+func _world_models() -> Dictionary:
+	# Dependency order matters for both a load and its rollback.
+	return {
+		"water": water.native,
+		"soil": soil,
+		"plants": trees,
+		"fungi": fungi,
+		"clock": ecology_clock,
+		"animals": animals
+	}
+
+
+func _world_configuration() -> Dictionary:
+	return {
+		"seed": settings.seed,
+		"extent": settings.extent,
+		"grid": settings.water_resolution,
+		"day_multiplier": settings.day_speed_multiplier,
+		"year_multiplier": settings.year_speed_multiplier,
+		"step": settings.ecology_step_s
+	}
+
+
+func _world_snapshot() -> Dictionary:
+	return ForestWorldState.capture(
+		_world_models(),
+		_world_configuration(),
+		{
+			"paused": paused,
+			"sim_speed": sim_speed,
+			"raining": water.raining,
+			"barrier": barrier_enabled,
+			"season_preview": season_preview,
+			"paused_before_preview": paused_before_preview,
+			"camera_position": camera.position,
+			"camera_rotation": camera.rotation,
+			"selection": observation.selected.duplicate()
+		}
+	)
+
+
+# Explicit preflight rejection is the atomic-load contract.
+# gdlint: disable=max-returns
+func _restore_world(state: Dictionary) -> bool:
+	var scene: Variant = state.get("scene")
+	if not scene is Dictionary:
+		return false
+	for key in ["paused", "raining", "barrier", "paused_before_preview"]:
+		if not scene.get(key) is bool:
+			return false
+	if not (scene.get("sim_speed") is float or scene.get("sim_speed") is int):
+		return false
+	if not is_finite(scene.sim_speed) or scene.sim_speed <= 0:
+		return false
+	if (
+		not scene.get("season_preview") is int
+		or scene.season_preview < 0
+		or scene.season_preview > 4
+	):
+		return false
+	for key in ["camera_position", "camera_rotation"]:
+		if not scene.get(key) is Vector3 or not scene[key].is_finite():
+			return false
+	if not scene.get("selection") is Dictionary:
+		return false
+	if not _compatible_world_state(state):
+		return false
+	if not ForestWorldState.restore(_world_models(), _world_configuration(), state):
+		return false
+	water.sync_fields()
+	water.raining = scene.raining
+	barrier_enabled = scene.barrier
+	# Native crests were restored together with model reserves; reconstruct only
+	# facade bookkeeping, never silently rerun/advance the hydraulic model.
+	water.barriers.clear()
+	if barrier_enabled:
+		water.barriers.append(barrier)
+	paused = scene.paused
+	sim_speed = scene.sim_speed
+	season_preview = scene.season_preview
+	paused_before_preview = scene.paused_before_preview
+	camera.position = scene.camera_position
+	camera.rotation = scene.camera_rotation
+	camera.yaw = camera.rotation.y
+	camera.pitch = camera.rotation.x
+	observation.selected = scene.selection.duplicate()
+	groundcover.bind_plants(trees)
+	vegetation.membership_count = -1
+	vegetation.refresh_trees(_display_climate())
+	fungi.sync_fields()
+	fungi_view.refresh()
+	animals_view.refresh(clampf(ecology_clock.pending_s / settings.ecology_step_s, 0, 1))
+	water_view.refresh()
+	dam_view.visible = barrier_enabled
+	atmosphere.set_rain(water.raining)
+	hud.set_paused(paused)
+	speed_window_wall = 0
+	speed_window_clock = water.clock
+	achieved_speed = 0
+	_refresh_hud()
+	return true
+
+
+func _compatible_world_state(state: Dictionary) -> bool:
+	# Reject cross-model inconsistencies before applying any participant.
+	var models: Variant = state.get("models")
+	if not models is Dictionary:
+		return false
+	for key in _world_models():
+		if not models.get(key) is Dictionary:
+			return false
+	var selection: Dictionary = state.scene.selection
+	if not selection.is_empty():
+		if (
+			selection.size() != 2
+			or selection.get("kind") not in observation.groups
+			or not selection.get("id") is int
+			or selection.id < 0
+		):
+			return false
+		var selected_model := "plants" if selection.kind == &"plant" else "animals"
+		if (
+			not models[selected_model].get("positions") is PackedVector3Array
+			or selection.id >= models[selected_model].positions.size()
+		):
+			return false
+	if not models.clock.get("ticks") is int or models.clock.ticks < 0:
+		return false
+	var water_s: float = models.clock.ticks * settings.ecology_step_s
+	var biological_s: float = water_s * settings.year_speed_multiplier
+	for value in [models.water.get("time_s"), models.plants.get("water_elapsed_s")]:
+		if not _same_time(value, water_s):
+			return false
+	for value in [
+		models.soil.get("time_s"),
+		models.plants.get("elapsed_s"),
+		models.fungi.get("elapsed_s"),
+		models.animals.get("elapsed_s")
+	]:
+		if not _same_time(value, biological_s):
+			return false
+	var patches: Variant = models.soil.get("patches")
+	var expected: Array = soil.snapshot().patches
+	if not patches is Array or patches.size() != expected.size():
+		return false
+	for i in patches.size():
+		if not patches[i] is Dictionary:
+			return false
+		for key in ["n", "dx", "ox", "oz"]:
+			if patches[i].get(key) != expected[i][key]:
+				return false
+	return true
+
+
+func _same_time(value: Variant, expected: float) -> bool:
+	return (
+		(value is float or value is int)
+		and is_finite(value)
+		and absf(value - expected) <= 1e-8 * maxf(1, expected)
+	)
+
+
+func _save_world() -> void:
+	var error := ForestWorldState.write(WORLD_SAVE, _world_snapshot())
+	hud.notice(
+		(
+			"Мир сохранён: растения, почва, грибы и заяц."
+			if error == OK
+			else "Не удалось сохранить мир: %s" % error_string(error)
+		)
+	)
+
+
+func _load_world() -> void:
+	var restored := _restore_world(ForestWorldState.read(WORLD_SAVE))
+	hud.notice(
+		(
+			"Мир восстановлен. Продолжаем с того же состояния."
+			if restored
+			else "Сохранение не найдено или несовместимо. Текущий мир не изменён."
+		)
+	)
+
+
+func _ecosystem_budget() -> PackedFloat64Array:
+	var total := PackedFloat64Array([0, 0, 0])
+	for model in [soil, trees, fungi]:
+		var metrics: Dictionary = model.metrics()
+		total[0] += metrics.carbon_kg
+		total[1] += metrics.nitrogen_kg
+		total[2] += metrics.phosphorus_kg
+	for i in animals.species.size():
+		total[0] += animals.biomass_c[i]
+		total[1] += animals.biomass_n[i]
+		total[2] += animals.biomass_p[i]
+	total[0] += (
+		soil.metrics().respired_kg_c
+		+ fungi.metrics().respired_kg_c
+		+ animals.respired_c_kg
+		- trees.photosynthesized_kg_c
+	)
+	return total
 
 
 func _set_speed(value: float) -> void:
@@ -285,6 +571,9 @@ func _set_speed(value: float) -> void:
 
 func _capture_sequence() -> void:
 	if capture_pending:
+		return
+	if understory_check:
+		_capture_understory()
 		return
 	if fungi_check:
 		if total_wall > 3 and capture_step == 0:
@@ -356,6 +645,91 @@ func _capture_sequence() -> void:
 			get_tree().quit()
 
 
+func _capture_understory() -> void:
+	if total_wall < 3 + capture_step * 2:
+		return
+	var step := capture_step
+	capture_step += 1
+	capture_pending = true
+	if step == 0:
+		assert(await _showcase(&"animal", 0), "actual input selects rendered hare")
+		await _save_frame("understory-01-hare.png")
+	elif step == 1 or step == 2:
+		var wanted := &"shrub" if step == 1 else &"herb"
+		var id := -1
+		for i in trees.species.size():
+			var d: ForestPlantDefinition = settings.plants[trees.species[i]]
+			if (
+				d.growth_form == wanted
+				and (step == 1 or d.life_cycle == &"annual")
+				and trees.alive[i]
+			):
+				id = i
+				break
+		assert(id >= 0 and await _showcase(&"plant", id), "actual input selects rendered plant")
+		await _save_frame("understory-%02d-%s.png" % [step + 1, wanted])
+	elif step == 3:
+		# Completed biological actions, not a staged animal reset or free food.
+		var consumed_before: float = animals.consumed_cnp.x
+		for i in 32:
+			_advance_world(settings.ecology_step_s)
+		assert(animals.consumed_cnp.x > consumed_before, "hare ate actual vegetation")
+		vegetation.refresh_trees(_display_climate())
+		animals_view.refresh(clampf(ecology_clock.pending_s / settings.ecology_step_s, 0, 1))
+		assert(await _showcase(&"animal", 0))
+		hud.observation_panel.details_toggle.button_pressed = true
+		await _save_frame("understory-04-fed-hare.png")
+		_write_report("understory-runtime.json")
+	elif step == 4:
+		observation.selected.clear()
+		camera.view(1)
+		await _save_frame("understory-05-valley.png")
+		get_tree().quit()
+	capture_pending = false
+
+
+func _showcase(kind: StringName, id: int) -> bool:
+	vegetation.refresh_trees(_display_climate())
+	animals_view.refresh(clampf(ecology_clock.pending_s / settings.ecology_step_s, 0, 1))
+	var shape: Dictionary = observation.groups[kind].shape.call(id)
+	var bounds: AABB = shape.bounds
+	var center := bounds.get_center()
+	var distance := maxf(1.8, bounds.size.length() * 1.6)
+	camera.position = center + Vector3(.6, .45, 1).normalized() * distance
+	camera.look_at(center)
+	camera.yaw = camera.rotation.y
+	camera.pitch = camera.rotation.x
+	observation.rebuild()
+	# Find a genuinely visible face, then use the engine input/GUI path.
+	var faces: PackedVector3Array = shape.faces
+	var target := Vector2(-1, -1)
+	for j in range(0, faces.size(), 3):
+		var point: Vector3 = shape.transform * ((faces[j] + faces[j + 1] + faces[j + 2]) / 3)
+		var pixel := camera.unproject_position(point)
+		if pixel.x < 520 or pixel.x > 1000 or pixel.y < 100 or pixel.y > 800:
+			continue
+		var picked := observation.pick(
+			camera.project_ray_origin(pixel), camera.project_ray_normal(pixel)
+		)
+		if picked == {"kind": kind, "id": id}:
+			target = pixel
+			break
+	observation.selected.clear()
+	if target.x < 0:
+		return false
+	var event := InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.position = target
+	event.pressed = true
+	Input.parse_input_event(event)
+	await get_tree().process_frame
+	event = event.duplicate()
+	event.pressed = false
+	Input.parse_input_event(event)
+	await get_tree().process_frame
+	return observation.selected == {"kind": kind, "id": id} and hud.observation_panel.visible
+
+
 func _capture_time_cycle() -> void:
 	var times := [1.0, 8.5, 10.5, 13.0, 20.0, 40.0, 60.5]
 	var names := ["day", "dusk", "night", "dawn", "autumn", "winter", "next-year"]
@@ -414,6 +788,9 @@ func _write_report(filename: String) -> void:
 		"living_trees": trees.alive.count(1),
 		"tree_deaths": trees.deaths,
 		"fungi": fungi.metrics(),
+		"soil_elements": soil.metrics(),
+		"plants": trees.metrics(),
+		"animals": animals.metrics(),
 		"fungal_bodies": fungi_view.body_count,
 		"fungal_groups": fungi_view.group_count,
 		"tree_transpired_m3": trees.transpired_m3,

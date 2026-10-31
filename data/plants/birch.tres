@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=12 format=3]
+[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=11 format=3]
 [ext_resource type="Script" path="res://scripts/plant_definition.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/plant_module.gd" id="2"]
 [sub_resource type="CylinderMesh" id="TrunkMesh"]
@@ -58,8 +58,24 @@ color = Color(0.72, 0.70, 0.62, 1)
 [resource]
 script = ExtResource("1")
 species_id = &"birch"
-display_name = "Берёза"
-weight = 0.32
+display_name = "Берёза повислая"
+latin_name = "Betula pendula"
+description = "Листопадное светолюбивое дерево; быстрорастущее, с белой корой и повислыми ветвями."
+source_url = "https://powo.science.kew.org/results?q=Betula%20pendula"
+growth_form = &"tree"
+life_cycle = &"perennial"
+initial_age_years = Vector2(5, 80)
+biomass_kg_c = 45.0
+cn_ratio = 42.0
+cp_ratio = 500.0
+edible_fraction = 0.0
+mature_age_years = 20.0
+seed_cost_kg_c = 0.001
+reproduction_per_year = 0.5
+dispersal_m = 50.0
+germination_fraction = 0.25
+recruitment_light = 0.3
+weight = 0.28
 wind_strength = 0.025
 deciduous = true
 reference_height_m = 13.0

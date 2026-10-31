@@ -1,0 +1,103 @@
+[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scripts/plant_definition.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/plant_module.gd" id="2"]
+
+[sub_resource type="CylinderMesh" id="BaseMesh"]
+top_radius = 0.03
+bottom_radius = 0.05
+height = 0.05
+radial_segments = 6
+[sub_resource type="CylinderMesh" id="InnerBladeMesh"]
+top_radius = 0.003
+bottom_radius = 0.012
+height = 0.75
+radial_segments = 3
+[sub_resource type="CylinderMesh" id="OuterBladeMesh"]
+top_radius = 0.002
+bottom_radius = 0.01
+height = 0.9
+radial_segments = 3
+[sub_resource type="SphereMesh" id="PanicleMesh"]
+radius = 1.0
+height = 2.0
+radial_segments = 5
+rings = 3
+[sub_resource type="Resource" id="Base"]
+script = ExtResource("2")
+mesh = SubResource("BaseMesh")
+offset = Vector3(0, 0.025, 0)
+color = Color(0.4, 0.35, 0.2, 1)
+[sub_resource type="Resource" id="InnerBlades"]
+script = ExtResource("2")
+mesh = SubResource("InnerBladeMesh")
+foliage = true
+count = 9
+offset = Vector3(0, 0.38, 0)
+radial_offset = 0.025
+turn = 0.7
+rotation_degrees = Vector3(0, 0, 4)
+scale_start = Vector3(1, 1, 1)
+scale_step = Vector3(0, -0.03, 0)
+color = Color(0.33, 0.45, 0.18, 1)
+[sub_resource type="Resource" id="OuterBlades"]
+script = ExtResource("2")
+mesh = SubResource("OuterBladeMesh")
+foliage = true
+count = 14
+offset = Vector3(0, 0.3, 0)
+radial_offset = 0.055
+turn = 0.45
+rotation_degrees = Vector3(0, 0, 20)
+scale_start = Vector3(1, 1, 1)
+scale_step = Vector3(0, -0.02, 0)
+color = Color(0.38, 0.48, 0.2, 1)
+[sub_resource type="Resource" id="Panicles"]
+script = ExtResource("2")
+mesh = SubResource("PanicleMesh")
+foliage = true
+count = 10
+offset = Vector3(0, 0.68, 0)
+radial_offset = 0.07
+turn = 2.4
+scale_start = Vector3(0.018, 0.045, 0.018)
+color = Color(0.65, 0.58, 0.35, 1)
+[resource]
+script = ExtResource("1")
+species_id = &"tufted_hairgrass"
+display_name = "Щучка дернистая"
+latin_name = "Deschampsia cespitosa"
+description = "Плотнодерновинный многолетний злак; обычен на влажных лугах и лесных полянах."
+source_url = "https://powo.science.kew.org/results?q=Deschampsia%20cespitosa"
+growth_form = &"grass"
+life_cycle = &"perennial"
+initial_age_years = Vector2(1, 5)
+biomass_kg_c = 0.1
+cn_ratio = 45.0
+cp_ratio = 400.0
+dead_decay_per_year = 1.5
+edible_fraction = 0.06
+mature_age_years = 2.0
+seed_cost_kg_c = 0.00005
+reproduction_per_year = 2.0
+dispersal_m = 4.0
+germination_fraction = 0.35
+recruitment_light = 0.1
+weight = 0.16
+wind_strength = 0.05
+deciduous = true
+leaf_on_day = 100.0
+leaf_off_day = 255.0
+leaf_transition_days = 25.0
+autumn_color = Color(0.72, 0.62, 0.32, 1)
+reference_height_m = 0.9
+max_height_m = 1.6
+crown_radius_m = 0.4
+height_growth_m_year = 0.12
+transpiration_m_s = 0.000000009259259
+minimum_light = 0.06
+flood_depth_m = 0.35
+stress_days = 16.0
+recovery_days = 8.0
+lifespan_years = 7.0
+modules = Array[ExtResource("2")]([SubResource("Base"), SubResource("InnerBlades"), SubResource("OuterBlades"), SubResource("Panicles")])

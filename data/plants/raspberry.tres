@@ -1,0 +1,108 @@
+[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scripts/plant_definition.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/plant_module.gd" id="2"]
+
+[sub_resource type="CylinderMesh" id="CaneMesh"]
+top_radius = 0.008
+bottom_radius = 0.03
+height = 1.3
+radial_segments = 5
+[sub_resource type="CylinderMesh" id="BranchMesh"]
+top_radius = 0.006
+bottom_radius = 0.018
+height = 0.8
+radial_segments = 5
+[sub_resource type="SphereMesh" id="LeafMesh"]
+radius = 1.0
+height = 1.2
+radial_segments = 7
+rings = 4
+[sub_resource type="SphereMesh" id="BerryMesh"]
+radius = 1.0
+height = 2.0
+radial_segments = 6
+rings = 3
+[sub_resource type="Resource" id="Canes"]
+script = ExtResource("2")
+mesh = SubResource("CaneMesh")
+count = 6
+offset = Vector3(0, 0.65, 0)
+radial_offset = 0.06
+turn = 1.047
+rotation_degrees = Vector3(0, 0, 28)
+scale_start = Vector3(1, 1, 1)
+scale_step = Vector3(0, 0.08, 0)
+color = Color(0.48, 0.28, 0.2, 1)
+[sub_resource type="Resource" id="Branches"]
+script = ExtResource("2")
+mesh = SubResource("BranchMesh")
+count = 8
+offset = Vector3(0, 0.9, 0)
+step = Vector3(0, 0.05, 0)
+radial_offset = 0.08
+turn = 1.2
+rotation_degrees = Vector3(0, 0, 50)
+scale_start = Vector3(1, 1, 1)
+scale_step = Vector3(0, -0.04, 0)
+color = Color(0.52, 0.36, 0.26, 1)
+[sub_resource type="Resource" id="Leaves"]
+script = ExtResource("2")
+mesh = SubResource("LeafMesh")
+foliage = true
+count = 16
+offset = Vector3(0, 0.45, 0)
+step = Vector3(0, 0.05, 0)
+radial_offset = 0.16
+turn = 2.4
+scale_start = Vector3(0.18, 0.08, 0.14)
+color = Color(0.22, 0.38, 0.14, 1)
+[sub_resource type="Resource" id="Berries"]
+script = ExtResource("2")
+mesh = SubResource("BerryMesh")
+count = 5
+offset = Vector3(0, 0.8, 0)
+step = Vector3(0, -0.05, 0)
+radial_offset = 0.14
+turn = 2.4
+scale_start = Vector3(0.035, 0.035, 0.035)
+color = Color(0.6, 0.1, 0.12, 1)
+[resource]
+script = ExtResource("1")
+species_id = &"raspberry"
+display_name = "Малина обыкновенная"
+latin_name = "Rubus idaeus"
+description = "Многолетнее растение с двухлетними побегами: плодоносящие стебли отмирают; модель не различает возраст побегов."
+source_url = "https://powo.science.kew.org/results?q=Rubus%20idaeus"
+growth_form = &"shrub"
+life_cycle = &"perennial"
+initial_age_years = Vector2(0.5, 5)
+biomass_kg_c = 0.5
+cn_ratio = 30.0
+cp_ratio = 300.0
+dead_decay_per_year = 0.3
+edible_fraction = 0.15
+mature_age_years = 2.0
+seed_cost_kg_c = 0.0003
+reproduction_per_year = 1.2
+dispersal_m = 3.0
+germination_fraction = 0.3
+recruitment_light = 0.2
+weight = 0.1
+wind_strength = 0.035
+deciduous = true
+leaf_on_day = 110.0
+leaf_off_day = 250.0
+leaf_transition_days = 20.0
+autumn_color = Color(0.85, 0.3, 0.15, 1)
+reference_height_m = 1.4
+max_height_m = 2.2
+crown_radius_m = 0.75
+height_growth_m_year = 0.45
+transpiration_m_s = 0.000000020833333
+minimum_light = 0.22
+flood_depth_m = 0.2
+stress_days = 12.0
+recovery_days = 8.0
+lifespan_years = 12.0
+modules = Array[ExtResource("2")]([SubResource("Canes"), SubResource("Branches"), SubResource("Leaves"), SubResource("Berries")])

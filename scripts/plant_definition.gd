@@ -4,6 +4,23 @@ extends Resource
 ## A new species is a resource, not another branch in rendering or placement.
 @export var species_id: StringName
 @export var display_name := ""
+@export var latin_name := ""
+@export_multiline var description := ""
+@export var source_url := ""
+@export var growth_form: StringName = &"tree"
+@export var life_cycle: StringName = &"perennial"
+@export var initial_age_years := Vector2(8, 40)
+@export var biomass_kg_c := 40.0  # Scenario carbon at size=1, not measured allometry.
+@export var cn_ratio := 40.0
+@export var cp_ratio := 500.0
+@export var dead_decay_per_year := 0.12
+@export var edible_fraction := 0.0
+@export var mature_age_years := 8.0
+@export var seed_cost_kg_c := 0.002
+@export var reproduction_per_year := 0.2
+@export var dispersal_m := 8.0
+@export var germination_fraction := .12
+@export var recruitment_light := .15
 @export var weight := 1.0
 @export var scale_range := Vector2(.72, 1.5)
 @export var minimum_channel_distance := 14.0
@@ -28,6 +45,15 @@ extends Resource
 
 
 func validate() -> void:
+	assert(growth_form in [&"tree", &"shrub", &"dwarf_shrub", &"herb", &"grass"])
+	assert(life_cycle in [&"annual", &"biennial", &"perennial"])
+	assert(initial_age_years.x >= 0 and initial_age_years.y >= initial_age_years.x)
+	assert(biomass_kg_c > 0 and cn_ratio > 0 and cp_ratio > 0)
+	assert(is_finite(dead_decay_per_year) and dead_decay_per_year >= 0)
+	assert(edible_fraction >= 0 and edible_fraction <= 1)
+	assert(mature_age_years >= 0 and seed_cost_kg_c > 0 and reproduction_per_year >= 0)
+	assert(dispersal_m >= 0 and germination_fraction >= 0 and germination_fraction <= 1)
+	assert(recruitment_light >= 0 and recruitment_light < 1)
 	assert(reference_height_m > 0 and max_height_m >= reference_height_m * scale_range.y)
 	assert(crown_radius_m > 0 and height_growth_m_year >= 0 and transpiration_m_s >= 0)
 	assert(minimum_light >= 0 and minimum_light < 1 and flood_depth_m > 0)

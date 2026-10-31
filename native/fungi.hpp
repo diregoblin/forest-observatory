@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include <cstdint>
+#include "soil.hpp"
 
 namespace forest {
 // One isolated soil observation plot. State: kg carbon / m²; time: s; space: m.
@@ -31,6 +32,12 @@ public:
                     const std::vector<double> &b, const std::vector<double> &r,
                     const std::vector<double> &l);
     bool advance(double seconds);
+    bool coupled=false;
+    Soil *soil=nullptr;
+    int soil_patch=-1;
+    double cn_ratio=15, cp_ratio=200, respired_kg=0;
+    bool bind_soil(Soil *owner,int patch,bool reset_ledger=true);
+    void sync_soil_fields();
     double carbon_kg() const;
     double balance_error_kg() const;
     bool finite_state() const;
@@ -38,5 +45,6 @@ public:
 private:
     std::vector<double> next_b, next_r;
     void step(double dt);
+    void step_coupled(double dt);
 };
 }

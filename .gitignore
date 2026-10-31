@@ -1,5 +1,5 @@
 .godot/
-.tools-venv/
+.tools-venv
 core
 core.*
 artifacts/*.log
@@ -10,5 +10,5 @@ artifacts/*.bin
 native/build*/
 native/deps/
 native/api/
-.preview-tools/
+.preview-tools
 addons/forest_hydro/bin/

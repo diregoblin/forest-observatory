@@ -1,0 +1,84 @@
+[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://scripts/plant_definition.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/plant_module.gd" id="2"]
+
+[sub_resource type="CylinderMesh" id="TrunkMesh"]
+top_radius = 0.08
+bottom_radius = 0.22
+height = 11.0
+radial_segments = 8
+[sub_resource type="CylinderMesh" id="BranchMesh"]
+top_radius = 0.015
+bottom_radius = 0.06
+height = 3.2
+radial_segments = 5
+[sub_resource type="SphereMesh" id="CrownMesh"]
+radius = 1.0
+height = 2.0
+radial_segments = 9
+rings = 5
+[sub_resource type="Resource" id="Trunk"]
+script = ExtResource("2")
+mesh = SubResource("TrunkMesh")
+offset = Vector3(0, 5.5, 0)
+color = Color(0.72, 0.74, 0.64, 1)
+[sub_resource type="Resource" id="Branches"]
+script = ExtResource("2")
+mesh = SubResource("BranchMesh")
+count = 6
+offset = Vector3(0, 7, 0)
+step = Vector3(0, 0.7, 0)
+turn = 2.4
+rotation_degrees = Vector3(0, 0, 42)
+color = Color(0.55, 0.55, 0.48, 1)
+[sub_resource type="Resource" id="Crown"]
+script = ExtResource("2")
+mesh = SubResource("CrownMesh")
+foliage = true
+count = 10
+offset = Vector3(0, 8.2, 0)
+step = Vector3(0, 0.65, 0)
+radial_offset = 1.1
+turn = 2.4
+scale_start = Vector3(1.9, 1.5, 1.7)
+scale_step = Vector3(-0.08, -0.05, -0.07)
+color = Color(0.36, 0.5, 0.2, 1)
+[resource]
+script = ExtResource("1")
+species_id = &"aspen"
+display_name = "Осина"
+latin_name = "Populus tremula"
+description = "Листопадное быстрорастущее дерево; светолюбивое, с дрожащими на ветру листьями."
+source_url = "https://powo.science.kew.org/results?q=Populus%20tremula"
+growth_form = &"tree"
+life_cycle = &"perennial"
+initial_age_years = Vector2(5, 60)
+biomass_kg_c = 55.0
+cn_ratio = 45.0
+cp_ratio = 500.0
+edible_fraction = 0.0
+mature_age_years = 15.0
+seed_cost_kg_c = 0.003
+reproduction_per_year = 0.3
+dispersal_m = 30.0
+germination_fraction = 0.2
+recruitment_light = 0.35
+weight = 0.2
+wind_strength = 0.02
+deciduous = true
+leaf_on_day = 120.0
+leaf_off_day = 250.0
+leaf_transition_days = 20.0
+autumn_color = Color(0.95, 0.72, 0.18, 1)
+reference_height_m = 14.0
+max_height_m = 28.0
+crown_radius_m = 2.4
+height_growth_m_year = 1.0
+transpiration_m_s = 0.000000025462963
+minimum_light = 0.35
+flood_depth_m = 0.2
+stress_days = 14.0
+recovery_days = 8.0
+lifespan_years = 90.0
+modules = Array[ExtResource("2")]([SubResource("Trunk"), SubResource("Branches"), SubResource("Crown")])

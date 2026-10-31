@@ -1,0 +1,83 @@
+[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://scripts/plant_definition.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/plant_module.gd" id="2"]
+
+[sub_resource type="CylinderMesh" id="StemMesh"]
+top_radius = 0.002
+bottom_radius = 0.005
+height = 0.12
+radial_segments = 4
+[sub_resource type="SphereMesh" id="LeafMesh"]
+radius = 1.0
+height = 1.6
+radial_segments = 7
+rings = 3
+[sub_resource type="SphereMesh" id="FlowerMesh"]
+radius = 1.0
+height = 2.0
+radial_segments = 6
+rings = 3
+[sub_resource type="Resource" id="Stem"]
+script = ExtResource("2")
+mesh = SubResource("StemMesh")
+offset = Vector3(0, 0.06, 0)
+color = Color(0.35, 0.45, 0.22, 1)
+[sub_resource type="Resource" id="Leaves"]
+script = ExtResource("2")
+mesh = SubResource("LeafMesh")
+foliage = true
+count = 3
+offset = Vector3(0, 0.13, 0)
+radial_offset = 0.045
+turn = 2.094
+scale_start = Vector3(0.06, 0.018, 0.045)
+color = Color(0.26, 0.48, 0.17, 1)
+[sub_resource type="Resource" id="Flowers"]
+script = ExtResource("2")
+mesh = SubResource("FlowerMesh")
+count = 2
+offset = Vector3(0, 0.15, 0)
+radial_offset = 0.02
+turn = 3.142
+scale_start = Vector3(0.012, 0.012, 0.012)
+color = Color(0.9, 0.92, 0.85, 1)
+[resource]
+script = ExtResource("1")
+species_id = &"wood_sorrel"
+display_name = "Кислица обыкновенная"
+latin_name = "Oxalis acetosella"
+description = "Низкое многолетнее травянистое растение с тройчатыми листьями; индикатор тенистых лесов."
+source_url = "https://powo.science.kew.org/results?q=Oxalis%20acetosella"
+growth_form = &"herb"
+life_cycle = &"perennial"
+initial_age_years = Vector2(1, 6)
+biomass_kg_c = 0.03
+cn_ratio = 28.0
+cp_ratio = 300.0
+dead_decay_per_year = 1.5
+edible_fraction = 0.08
+mature_age_years = 2.0
+seed_cost_kg_c = 0.00002
+reproduction_per_year = 0.8
+dispersal_m = 1.5
+germination_fraction = 0.25
+recruitment_light = 0.05
+weight = 0.14
+wind_strength = 0.01
+deciduous = true
+leaf_on_day = 105.0
+leaf_off_day = 245.0
+leaf_transition_days = 25.0
+autumn_color = Color(0.55, 0.35, 0.15, 1)
+reference_height_m = 0.16
+max_height_m = 0.28
+crown_radius_m = 0.18
+height_growth_m_year = 0.03
+transpiration_m_s = 0.000000002893519
+minimum_light = 0.04
+flood_depth_m = 0.1
+stress_days = 10.0
+recovery_days = 6.0
+lifespan_years = 9.0
+modules = Array[ExtResource("2")]([SubResource("Stem"), SubResource("Leaves"), SubResource("Flowers")])

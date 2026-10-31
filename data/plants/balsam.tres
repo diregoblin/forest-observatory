@@ -1,0 +1,103 @@
+[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scripts/plant_definition.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/plant_module.gd" id="2"]
+
+[sub_resource type="CylinderMesh" id="StemMesh"]
+top_radius = 0.012
+bottom_radius = 0.03
+height = 0.5
+radial_segments = 5
+[sub_resource type="CylinderMesh" id="BranchMesh"]
+top_radius = 0.005
+bottom_radius = 0.014
+height = 0.22
+radial_segments = 4
+[sub_resource type="SphereMesh" id="LeafMesh"]
+radius = 1.0
+height = 1.4
+radial_segments = 7
+rings = 3
+[sub_resource type="SphereMesh" id="FlowerMesh"]
+radius = 1.0
+height = 2.0
+radial_segments = 6
+rings = 3
+[sub_resource type="Resource" id="Stem"]
+script = ExtResource("2")
+mesh = SubResource("StemMesh")
+offset = Vector3(0, 0.25, 0)
+color = Color(0.38, 0.48, 0.22, 1)
+[sub_resource type="Resource" id="Branches"]
+script = ExtResource("2")
+mesh = SubResource("BranchMesh")
+count = 5
+offset = Vector3(0, 0.2, 0)
+step = Vector3(0, 0.09, 0)
+radial_offset = 0.04
+turn = 2.4
+rotation_degrees = Vector3(0, 0, 55)
+color = Color(0.4, 0.5, 0.24, 1)
+[sub_resource type="Resource" id="Leaves"]
+script = ExtResource("2")
+mesh = SubResource("LeafMesh")
+foliage = true
+count = 12
+offset = Vector3(0, 0.22, 0)
+step = Vector3(0, 0.025, 0)
+radial_offset = 0.13
+turn = 2.4
+scale_start = Vector3(0.09, 0.025, 0.055)
+scale_step = Vector3(0, -0.001, 0)
+color = Color(0.24, 0.44, 0.16, 1)
+[sub_resource type="Resource" id="Flowers"]
+script = ExtResource("2")
+mesh = SubResource("FlowerMesh")
+foliage = true
+count = 6
+offset = Vector3(0, 0.38, 0)
+step = Vector3(0, 0.02, 0)
+radial_offset = 0.1
+turn = 2.4
+scale_start = Vector3(0.05, 0.035, 0.05)
+scale_step = Vector3(0, -0.001, 0)
+color = Color(0.85, 0.55, 0.18, 1)
+[resource]
+script = ExtResource("1")
+species_id = &"balsam"
+display_name = "Недотрога обыкновенная"
+latin_name = "Impatiens noli-tangere"
+description = "Однолетнее травянистое растение влажных тенистых лесов; размножается семенами."
+source_url = "https://powo.science.kew.org/results?q=Impatiens%20noli-tangere"
+growth_form = &"herb"
+life_cycle = &"annual"
+initial_age_years = Vector2(0.05, 0.3)
+biomass_kg_c = 0.05
+cn_ratio = 22.0
+cp_ratio = 250.0
+dead_decay_per_year = 1.5
+edible_fraction = 0.0
+mature_age_years = 0.3
+seed_cost_kg_c = 0.00001
+reproduction_per_year = 3.0
+dispersal_m = 2.0
+germination_fraction = 0.4
+recruitment_light = 0.1
+weight = 0.09
+wind_strength = 0.02
+deciduous = true
+leaf_on_day = 120.0
+leaf_off_day = 240.0
+leaf_transition_days = 15.0
+autumn_color = Color(0.6, 0.5, 0.2, 1)
+reference_height_m = 0.55
+max_height_m = 1.0
+crown_radius_m = 0.3
+height_growth_m_year = 0.55
+transpiration_m_s = 0.000000006944444
+minimum_light = 0.08
+flood_depth_m = 0.25
+stress_days = 10.0
+recovery_days = 6.0
+lifespan_years = 1.0
+modules = Array[ExtResource("2")]([SubResource("Stem"), SubResource("Branches"), SubResource("Leaves"), SubResource("Flowers")])
