@@ -47,6 +47,15 @@ func _run() -> void:
 	world._toggle_pause()
 	await _frame()
 	assert(world.atmosphere.sun.rotation != frozen, "resume continues without waiting for a tick")
+	world.hud.speed_buttons[8.0].pressed.emit()
+	var speed_start: float = world.water.clock
+	for frame in 20:
+		await _frame()
+		world._check_clock_alignment()
+	assert(absf(world.water.clock - speed_start - 4.0) < 1e-8, "x8 drives all models, not just UI")
+	assert(world.hud.calendar_label.text.contains("Сутки 7.5 с · год 1.2 мин"))
+	await world._save_frame("shared-speed-08.png")
+	world.hud.speed_buttons[1.0].pressed.emit()
 	world._toggle_rain()
 	assert(is_equal_approx(world.atmosphere.sun.light_energy, world.atmosphere.solar_energy * .74))
 	world._toggle_rain()
@@ -70,13 +79,14 @@ func _run() -> void:
 		"frames_checked": 80,
 		"frame_step_s": .025,
 		"ecology_step_s": world.settings.ecology_step_s,
-		"day_s": world.settings.ecology_day_s,
+		"day_water_s": world.settings.day_water_s(),
 		"min_frame_angle_deg": rad_to_deg(minimum_angle),
 		"max_frame_angle_deg": rad_to_deg(maximum_angle),
 		"pause_freezes_models_and_sun": true,
 		"preview_read_only_and_exact_return": true,
 		"resume_moves_next_frame": true,
-		"rain_preserves_solar_attenuation": true
+		"rain_preserves_solar_attenuation": true,
+		"shared_speed_x8_water_calendar_trees_fungi": true
 	}
 	var file := FileAccess.open("res://artifacts/sun-check.json", FileAccess.WRITE)
 	file.store_string(JSON.stringify(report, "  "))

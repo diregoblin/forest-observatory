@@ -45,10 +45,15 @@ partitioning. Keep numerical controls in `tools/check_water.gd` meaningful.
 - Capture screenshots after `RenderingServer.frame_post_draw`; a forced draw can
   still return the previous frame. Verify the date/preview label in seasonal PNGs.
 - Seasonal preview is read-only and paused, never a shortcut for advancing water
-  or tree age. The independent ecosystem clock (including pending fixed-step time),
+  or tree age. The shared driving clock (including pending fixed-step time),
   tree biology and hydrology/evaporation forcing must survive continuation.
-- Water stays in SI; ecosystem day/night and biological year have separate
-  configurable scene-time periods. Water speed buttons must not change them.
+- Water stays in SI; solar and biological seconds are configurable multiples
+  of completed water seconds (`day_speed_multiplier`, `year_speed_multiplier`).
+  UI speed scales water, sun, calendar, trees and fungi together. Complete each
+  shared fixed tick before starting another; overload cannot separate clocks.
+  The shared tick is at most `water_step`; native CFL may subdivide further.
+  Presentation interpolates that clock without advancing it. A speed change
+  may cancel excess requested debt, never rewind the displayed solar phase.
   Transpiration uses elapsed water seconds, age/growth/stress use biological
   seconds. This is intentional timescale separation, not an annual watershed claim.
 

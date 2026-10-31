@@ -17,6 +17,7 @@ var dam_button: Button
 var pause_button: Button
 var season_button: Button
 var calendar_label: Label
+var speed_buttons: Dictionary = {}
 var hydro_map := ForestHydrologyMap.new()
 var map_legend: Label
 var fungi_map := ForestFungiMap.new()
@@ -70,9 +71,22 @@ func configure(settings: ForestSettings) -> void:
 	pause_button = _button(v, "Пауза", func(): pause_requested.emit())
 	var speeds := HBoxContainer.new()
 	v.add_child(speeds)
+	var speed_group := ButtonGroup.new()
 	for s in [1, 8, 60, 600]:
 		var b := _button(speeds, "×" + str(s), func(): speed_requested.emit(float(s)))
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.toggle_mode = true
+		b.button_group = speed_group
+		b.tooltip_text = "Общий темп воды, суток и года ×%d" % s
+		b.add_theme_color_override("font_pressed_color", Color(.97, .96, .87))
+		b.add_theme_color_override("font_hover_pressed_color", Color(.97, .96, .87))
+		var selected := StyleBoxFlat.new()
+		selected.bg_color = Color(.33, .43, .25, .95)
+		selected.set_corner_radius_all(4)
+		selected.content_margin_left = 10
+		selected.content_margin_right = 10
+		b.add_theme_stylebox_override("pressed", selected)
+		speed_buttons[float(s)] = b
 	var diagnostics := HBoxContainer.new()
 	v.add_child(diagnostics)
 	season_button = _button(diagnostics, "Сезоны · T", func(): season_requested.emit())
@@ -169,7 +183,7 @@ func refresh(
 	vegetation: ForestVegetation,
 	groundcover: ForestGroundcover,
 	barrier_enabled: bool,
-	requested_speed := 2.0,
+	requested_speed := 1.0,
 	achieved_speed := 0.0,
 	trees: ForestTrees = null,
 	climate: Dictionary = {},
@@ -178,7 +192,7 @@ func refresh(
 	info.text = (
 		(
 			"Вода  %02d:%02d:%02d\nПоверхность  %d м³\nВ почве  %d м³ · под ней %d м³"
-			+ "\nТемп воды ×%.0f · факт ×%.1f"
+			+ "\nТемп мира ×%.0f · факт ×%.1f"
 		)
 		% [
 			int(water.clock / 3600),
@@ -191,6 +205,8 @@ func refresh(
 			achieved_speed
 		]
 	)
+	for speed in speed_buttons:
+		speed_buttons[speed].set_pressed_no_signal(is_equal_approx(speed, requested_speed))
 	weather_label.text = (
 		"Дождь  %.0f мм/ч" % (water.config.rainfall_m_s * 3600000.0)
 		if water.raining
@@ -201,7 +217,7 @@ func refresh(
 		plant_label.text = "%d живых деревьев · %d сухостой" % [trees.alive.count(1), trees.deaths]
 	if not climate.is_empty():
 		calendar_label.text = (
-			"Год %d · %s · %s\n%s · %.0f °C · свет %.1f ч\nСутки %.0f с · год %.0f мин%s"
+			"Год %d · %s · %s\n%s · %.0f °C · свет %.1f ч\nСутки %s · год %s%s"
 			% [
 				climate.year,
 				climate.date,
@@ -209,16 +225,27 @@ func refresh(
 				climate.season,
 				climate.temperature_c,
 				climate.daylight_h,
-				water.config.ecology_day_s,
-				water.config.ecology_year_s / 60.0,
+				_duration(water.config.day_water_s() / requested_speed),
+				_duration(water.config.year_water_s() / requested_speed),
 				" · ПРОСМОТР" if preview else ""
 			]
+		)
+		calendar_label.tooltip_text = (
+			"Длительности при выбранном темпе; при нагрузке весь мир замедляется вместе."
+			+ (
+				"\nМножитель суток ×%.0f, биологического времени ×%.0f к водным секундам."
+				% [water.config.day_speed_multiplier, water.config.year_speed_multiplier]
+			)
 		)
 		season_button.text = "К расчёту · T" if preview else "Сезоны · T"
 	hydro_map.refresh(water)
 
 	rain_button.text = "Дождь · ВКЛ" if water.raining else "Дождь · ВЫКЛ"
 	dam_button.text = "Преграда · ЕСТЬ" if barrier_enabled else "Преграда · НЕТ"
+
+
+func _duration(seconds: float) -> String:
+	return "%.1f мин" % (seconds / 60.0) if seconds >= 60 else "%.1f с" % seconds
 
 
 func toggle_map() -> void:

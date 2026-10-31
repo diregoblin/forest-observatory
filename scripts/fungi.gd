@@ -113,7 +113,7 @@ func snapshot() -> Dictionary:
 	for plot in plots:
 		states.append({"origin": plot.origin, "state": plot.native.snapshot()})
 	return {
-		"version": 1,
+		"version": 2,
 		"configuration": _configuration(),
 		"elapsed_s": elapsed_s,
 		"ticks": ticks,
@@ -124,7 +124,7 @@ func snapshot() -> Dictionary:
 # Explicit rejection guards keep untrusted checkpoint validation atomic and readable.
 # gdlint: disable=max-returns
 func restore(state: Dictionary) -> bool:
-	if state.get("version") != 1 or state.get("configuration") != _configuration():
+	if state.get("version") != 2 or state.get("configuration") != _configuration():
 		return false
 	if not state.get("plots") is Array or state.plots.size() != plots.size():
 		return false
@@ -176,7 +176,7 @@ func _configuration() -> Array:
 		c.fungi_plot_centers,
 		c.fungus.options(),
 		c.ecology_step_s,
-		c.ecology_year_s
+		c.year_speed_multiplier
 	]
 
 

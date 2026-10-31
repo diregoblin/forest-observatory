@@ -13,6 +13,10 @@ func _run() -> void:
 	var fungi := ForestFungi.new(water)
 	assert(fungi.plots.size() == 3)
 	var initial := fungi.snapshot()
+	var legacy := initial.duplicate(true)
+	legacy.version = 1
+	assert(not fungi.restore(legacy), "old period-based configuration is not a time multiplier")
+	assert(fungi.snapshot() == initial)
 	var years := ForestClimate.YEAR_S
 	for i in 20:
 		fungi.step(years / 100.0, water, ForestClimate.sample(i * years / 100.0))

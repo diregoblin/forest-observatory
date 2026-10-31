@@ -4,4 +4,7 @@
 [ext_resource type="Resource" path="res://data/plants/birch.tres" id="3"]
 [resource]
 script = ExtResource("1")
+initial_speed = 1.0
+day_speed_multiplier = 1440.0
+year_speed_multiplier = 52560.0
 plants = Array[Resource]([ExtResource("2"), ExtResource("3")])

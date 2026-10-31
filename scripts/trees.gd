@@ -229,7 +229,7 @@ func _configuration() -> Dictionary:
 	return {
 		"start_day": land.settings.start_day,
 		"latitude": land.settings.latitude_deg,
-		"ecology_year_s": land.settings.ecology_year_s,
+		"year_speed_multiplier": land.settings.year_speed_multiplier,
 		"traits": definitions
 	}
 

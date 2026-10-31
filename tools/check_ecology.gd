@@ -138,9 +138,9 @@ func _initialize() -> void:
 		"winter_no_growth": true,
 		"deciduous_leaf_cycle": true,
 		"evergreen_winter_foliage": true,
-		"biology_calendar_independent_of_water": true,
+		"solar_and_biological_multipliers_from_water": true,
 		"split_clock_partition_and_resume": true,
-		"water_tempo_does_not_scale_biological_age": true,
+		"shared_speed_scales_calendar_and_biological_age": true,
 		"uptake_uses_hydrological_seconds": true,
 		"solar_noon_midnight_and_horizon": true,
 		"solar_presentation_continuous_read_only_and_bounded": true,
@@ -208,6 +208,9 @@ func _check_presentation_clock() -> void:
 	var debt_before := clock.snapshot()
 	assert(clock.presentation_sample() == clock.sample(), "display is bounded by completed time")
 	assert(clock.snapshot() == debt_before)
+	var loaded_phase := clock.presentation_sample()
+	assert(clock.cancel_excess_request() > 0)
+	assert(clock.presentation_sample() == loaded_phase, "speed changes cannot rewind the sky")
 	var fresh := ForestEcologyClock.new(settings)
 	fresh.request(.25)
 	assert(fresh.presentation_sample() == fresh.sample(), "startup never displays negative time")
@@ -237,8 +240,12 @@ func _check_split_clocks() -> void:
 	corrupt.ticks = -1
 	assert(not a.restore(corrupt) and a.snapshot() == before)
 	var other: ForestSettings = settings.duplicate(true)
-	other.ecology_year_s *= 2
+	other.year_speed_multiplier *= .5
 	assert(not ForestEcologyClock.new(other).restore(before), "changed clock periods rejected")
+	var legacy := before.duplicate(true)
+	legacy.version = 1
+	assert(not a.restore(legacy), "old independent wall-clock semantics are not silently restored")
+	_check_shared_speed()
 	# Independent solar geometry controls: noon > horizon > midnight; sunrise is z=0.
 	var noon := ForestClimate.sample(0, 80, 60, 12)
 	var midnight := ForestClimate.sample(0, 80, 60, 0)
@@ -246,13 +253,14 @@ func _check_split_clocks() -> void:
 	assert(absf(noon.sun_elevation - deg_to_rad(30)) < 1e-8)
 	assert(midnight.sun_elevation < 0 and absf(sunrise.sun_elevation) < 1e-8)
 	assert(ForestClimate.sample(0, 200, 60, 12).daylight_h > noon.daylight_h)
-	# Identical biology, 10x different water throughput. Closed, wet chambers.
+	# Unit-level uptake control: prescribe IDENTICAL biological dt and 10x water
+	# dt directly to the tree model. This is not the scene's shared speed control.
 	var slow := chamber(1)
 	var fast := chamber(1)
 	var age_before: float = slow.trees.age_years[0]
 	var size_before: PackedFloat64Array = slow.trees.size.duplicate()
 	var clock := ForestEcologyClock.new(slow.settings)
-	clock.request(slow.settings.ecology_year_s)
+	clock.request(slow.settings.year_water_s())
 	while clock.step():
 		for world in [slow, fast]:
 			var water_dt := .1 if world == slow else 1.0
@@ -291,3 +299,41 @@ func _check_split_clocks() -> void:
 	var dry_stress: float = dry.trees.stress[0]
 	dry.trees.step(ForestClimate.DAY_S, dry.water, 0)
 	assert(dry.trees.stress[0] > dry_stress and dry.trees.transpired_m3 == 0)
+
+
+func _check_shared_speed() -> void:
+	var slow := chamber(1)
+	var fast := chamber(1)
+	var slow_clock := ForestEcologyClock.new(slow.settings)
+	var fast_clock := ForestEcologyClock.new(fast.settings)
+	var initial_age: float = slow.trees.age_years[0]
+	for frame in 20:
+		for pair in [[slow, slow_clock, 1.0], [fast, fast_clock, 8.0]]:
+			var clock: ForestEcologyClock = pair[1]
+			clock.request(.025 * pair[2])
+			while clock.step():
+				pair[0].water.step(pair[0].settings.ecology_step_s)
+				pair[0].trees.step(
+					clock.biological_step_s(), pair[0].water, pair[0].settings.ecology_step_s
+				)
+	assert(fast.water.clock == slow.water.clock * 8)
+	assert(slow_clock.elapsed_s == slow.water.clock and fast_clock.elapsed_s == fast.water.clock)
+	var age_ratio: float = (
+		(fast.trees.age_years[0] - initial_age) / (slow.trees.age_years[0] - initial_age)
+	)
+	assert(absf(age_ratio - 8) < 1e-8)
+	var slow_hour: float = slow_clock.sample().hour - slow.settings.start_hour
+	var fast_hour: float = fast_clock.sample().hour - fast.settings.start_hour
+	assert(absf(fast_hour / slow_hour - 8) < 1e-8)
+	assert(
+		absf(fast.trees.elapsed_s - fast.water.clock * fast.settings.year_speed_multiplier) < 1e-8
+	)
+	var custom: ForestSettings = slow.settings.duplicate(true)
+	custom.day_speed_multiplier *= 2.0
+	custom.year_speed_multiplier *= .25
+	custom.validate()
+	var custom_clock := ForestEcologyClock.new(custom)
+	custom_clock.request(slow.water.clock)
+	_drain_clock(custom_clock)
+	assert(absf(custom_clock.sample().hour - custom.start_hour - slow_hour * 2.0) < 1e-8)
+	assert(custom_clock.biological_step_s() == slow_clock.biological_step_s() * .25)

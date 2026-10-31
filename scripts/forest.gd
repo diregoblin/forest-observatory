@@ -18,9 +18,8 @@ var water_view := ForestWaterView.new()
 var atmosphere := ForestAtmosphere.new()
 var hud := ForestHud.new()
 var dam_view := ForestBarrierView.new()
-var sim_speed := 2.0
+var sim_speed := settings.initial_speed
 var paused := false
-var accumulator := 0.0
 var render_accum := 0.0
 var vegetation_accum := 0.0
 var achieved_speed := 0.0
@@ -56,8 +55,8 @@ func _ready() -> void:
 		if arg == "--cycle-check":
 			# Isolated render assay, not the shipped periods. No file/config mutation.
 			cycle_check = true
-			settings.ecology_day_s = 20.0
-			settings.ecology_year_s = 60.0
+			settings.day_speed_multiplier = ForestClimate.DAY_S / 20.0
+			settings.year_speed_multiplier = ForestClimate.YEAR_S / 60.0
 			settings.ecology_step_s = .1
 		if arg == "--fungi-check":
 			fungi_check = true
@@ -115,18 +114,7 @@ func _ready() -> void:
 func _process(dt: float) -> void:
 	total_wall += dt
 	if not paused:
-		accumulator += dt * sim_speed
-		var budget_start := Time.get_ticks_usec()
-		# Keep debt rather than changing physics/dropping requested model time.
-		while accumulator >= settings.water_step and Time.get_ticks_usec() - budget_start < 6000:
-			var started := Time.get_ticks_usec()
-			var climate := ecology_clock.sample()
-			water.native.set_evaporation(settings.evaporation_m_s * climate.evaporation)
-			water.step(settings.water_step, false)
-			simulation_usec += Time.get_ticks_usec() - started
-			simulation_steps += 1
-			accumulator -= settings.water_step
-		_advance_ecology(dt)
+		_advance_world(dt * sim_speed)
 	# Lighting is presentation: sample between model ticks at render cadence.
 	atmosphere.set_season(_display_climate())
 	speed_window_wall += dt
@@ -152,14 +140,22 @@ func _process(dt: float) -> void:
 		_capture_sequence()
 
 
-func _advance_ecology(dt: float) -> void:
+func _advance_world(dt: float) -> void:
 	ecology_clock.request(dt)
 	var started := Time.get_ticks_usec()
+	# One debt/budget for all models. Complete a coupled tick before starting
+	# another: performance limits may slow the world, never separate its clocks.
 	while Time.get_ticks_usec() - started < 6000 and ecology_clock.step():
+		var tick_started := Time.get_ticks_usec()
+		var climate := ecology_clock.sample()
+		water.native.set_evaporation(settings.evaporation_m_s * climate.evaporation)
+		water.step(settings.ecology_step_s, false)
+		simulation_usec += Time.get_ticks_usec() - tick_started
+		simulation_steps += 1
 		water.sync_fields()
 		var biological_dt := ecology_clock.biological_step_s()
 		groundcover.step(biological_dt, water)
-		var tick_started := Time.get_ticks_usec()
+		tick_started = Time.get_ticks_usec()
 		trees.step(biological_dt, water, maxf(0, water.clock - trees.water_elapsed_s))
 		ecology_usec += Time.get_ticks_usec() - tick_started
 		fungi.step(biological_dt, water, ecology_clock.sample())
@@ -277,11 +273,14 @@ func _refresh_hud() -> void:
 
 
 func _set_speed(value: float) -> void:
+	assert(is_finite(value) and value > 0)
 	sim_speed = value
-	# A new tempo replaces unserved demand at the previous tempo, not model state.
-	var fractional := fmod(accumulator, settings.water_step)
-	cancelled_request_s += accumulator - fractional
-	accumulator = fractional
+	# Discard unserved old-tempo work, not model state or the visible sun phase.
+	cancelled_request_s += ecology_clock.cancel_excess_request()
+	speed_window_wall = 0.0
+	speed_window_clock = water.clock
+	achieved_speed = 0.0
+	_refresh_hud()
 
 
 func _capture_sequence() -> void:
@@ -315,7 +314,7 @@ func _capture_sequence() -> void:
 		camera.view(3)
 		_toggle_dam()
 		_toggle_rain()
-		sim_speed = 60
+		_set_speed(60)
 		accelerated_start_wall = total_wall
 		accelerated_start_clock = water.clock
 		capture_step = 2
@@ -403,7 +402,7 @@ func _write_report(filename: String) -> void:
 		"cell_size_m": water.cell_size,
 		"requested_speed": sim_speed,
 		"achieved_model_s_per_wall_s": achieved_speed,
-		"pending_model_s": accumulator,
+		"pending_model_s": ecology_clock.pending_s,
 		"cancelled_tempo_demand_s": cancelled_request_s,
 		"accelerated_achieved_model_s_per_wall_s": accelerated_achieved_speed,
 		"balance_error": water.balance_error(),
@@ -421,8 +420,10 @@ func _write_report(filename: String) -> void:
 		"calendar": _display_climate(),
 		"ecology_clock": ecology_clock.snapshot(),
 		"ecology_elapsed_s": ecology_clock.elapsed_s,
-		"ecology_day_s": settings.ecology_day_s,
-		"ecology_year_s": settings.ecology_year_s,
+		"day_speed_multiplier": settings.day_speed_multiplier,
+		"year_speed_multiplier": settings.year_speed_multiplier,
+		"day_water_s": settings.day_water_s(),
+		"year_water_s": settings.year_water_s(),
 		"season_preview": season_preview,
 		"model_time": water.clock,
 		"dam": barrier_enabled,
@@ -468,20 +469,35 @@ func _check_controls() -> void:
 	var position_before := camera.position
 	hud.view_requested.emit(3)
 	assert(camera.position != position_before)
-	accumulator = 100.25
+	ecology_clock.request(100.25)
+	var phase_before := ecology_clock.presentation_sample()
 	hud.speed_requested.emit(8)
 	assert(sim_speed == 8)
 	assert(
-		accumulator == 0.25 and cancelled_request_s == 100.0,
-		"new tempo cancels old demand, not model time"
+		ecology_clock.pending_s == .5 and cancelled_request_s == 99.75,
+		"new tempo cancels old debt but retains the visible interpolation phase"
 	)
-	sim_speed = 2
-	# Water speed buttons don't alter ecosystem periods or its fixed-step advance.
-	for speed in [1, 600]:
-		_set_speed(speed)
+	assert(ecology_clock.presentation_sample() == phase_before)
+	_process(0)  # Complete the retained tick before testing fresh speed requests.
+	# Same shared tick at all selected speeds; faster buttons need less wall time.
+	for speed in [1.0, 8.0, 60.0, 600.0]:
+		hud.speed_buttons[speed].pressed.emit()
+		assert(sim_speed == speed and hud.speed_buttons[speed].button_pressed)
 		var time_before := ecology_clock.elapsed_s
-		_process(settings.ecology_step_s)
+		var water_before := water.clock
+		_process(settings.ecology_step_s / speed)
 		assert(absf(ecology_clock.elapsed_s - time_before - settings.ecology_step_s) < 1e-8)
+		assert(absf(water.clock - water_before - settings.ecology_step_s) < 1e-8)
+		_check_clock_alignment()
+	assert(hud.info.text.contains("Темп мира ×600"))
+	assert(hud.calendar_label.text.contains("Сутки 0.1 с · год 1.0 с"))
+	# Deliberately overloaded request: neither calendar nor ecology may outrun water.
+	_process(1.0)
+	assert(ecology_clock.pending_s > settings.ecology_step_s)
+	_check_clock_alignment()
+	var loaded_phase := ecology_clock.presentation_sample()
+	hud.speed_buttons[1.0].pressed.emit()
+	assert(ecology_clock.presentation_sample() == loaded_phase, "no backwards sun jump on slowdown")
 	_toggle_pause()
 	var paused_water: Dictionary = water.native.snapshot()
 	var paused_clock := ecology_clock.snapshot()
@@ -489,7 +505,7 @@ func _check_controls() -> void:
 	var paused_fungi := fungi.snapshot()
 	_process(2)
 	assert(water.native.snapshot() == paused_water and trees.snapshot() == paused_trees)
-	assert(ecology_clock.snapshot() == paused_clock, "pause freezes both independent clocks")
+	assert(ecology_clock.snapshot() == paused_clock, "pause freezes the shared clock and its debt")
 	assert(fungi.snapshot() == paused_fungi, "pause freezes fungal carbon and time")
 	_toggle_pause()
 	var key := InputEventKey.new()
@@ -546,10 +562,19 @@ func _check_controls() -> void:
 				"passed": true,
 				"season_preview_read_only": true,
 				"water_map_toggle": true,
-				"independent_ecosystem_tempo": true,
+				"shared_speed_water_sun_year_trees_and_fungi": true,
+				"overload_clocks_remain_aligned": true,
+				"speed_change_preserves_solar_phase": true,
 				"pause_freezes_both_clocks": true,
 				"scope": "Scene signals and key handler; not physical mouse/keyboard input"
 			}
 		)
 	)
 	print("CONTROLS_CHECK passed")
+
+
+func _check_clock_alignment() -> void:
+	assert(absf(water.clock - ecology_clock.elapsed_s) < 1e-8)
+	assert(absf(trees.water_elapsed_s - water.clock) < 1e-8)
+	assert(absf(trees.elapsed_s - water.clock * settings.year_speed_multiplier) < 1e-5)
+	assert(absf(fungi.elapsed_s - trees.elapsed_s) < 1e-5)

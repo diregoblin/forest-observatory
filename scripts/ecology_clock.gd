@@ -1,8 +1,8 @@
 class_name ForestEcologyClock
 extends RefCounted
 
-## Fixed-step ecosystem time, independent of hydrological throughput/speed.
-## Day/night and annual phenology have independently configurable periods.
+## Fixed hydrological ticks shared with the scene's water/ecology scheduler.
+## Solar and biological seconds are configured multiples of completed water time.
 var settings: ForestSettings
 var elapsed_s := 0.0
 var pending_s := 0.0
@@ -28,7 +28,15 @@ func step() -> bool:
 
 
 func biological_step_s() -> float:
-	return settings.ecology_step_s * ForestClimate.YEAR_S / settings.ecology_year_s
+	return settings.ecology_step_s * settings.year_speed_multiplier
+
+
+func cancel_excess_request() -> float:
+	# Retain the current interpolation phase when cancelling old speed demand.
+	var retained := minf(pending_s, settings.ecology_step_s)
+	var cancelled := pending_s - retained
+	pending_s = retained
+	return cancelled
 
 
 func sample() -> Dictionary:
@@ -45,22 +53,19 @@ func presentation_sample() -> Dictionary:
 
 
 func _sample_at(time_s: float) -> Dictionary:
-	var hour := fposmod(settings.start_hour + 24.0 * time_s / settings.ecology_day_s, 24.0)
+	var hour := fposmod(settings.start_hour + time_s * settings.day_speed_multiplier / 3600.0, 24.0)
 	return ForestClimate.sample(
-		time_s * ForestClimate.YEAR_S / settings.ecology_year_s,
-		settings.start_day,
-		settings.latitude_deg,
-		hour
+		time_s * settings.year_speed_multiplier, settings.start_day, settings.latitude_deg, hour
 	)
 
 
 func snapshot() -> Dictionary:
 	return {
-		"version": 1,
+		"version": 2,
 		"configuration":
 		[
-			settings.ecology_day_s,
-			settings.ecology_year_s,
+			settings.day_speed_multiplier,
+			settings.year_speed_multiplier,
 			settings.ecology_step_s,
 			settings.start_day,
 			settings.start_hour,
@@ -72,7 +77,7 @@ func snapshot() -> Dictionary:
 
 
 func restore(state: Dictionary) -> bool:
-	if state.get("version") != 1 or state.get("configuration") != snapshot().configuration:
+	if state.get("version") != 2 or state.get("configuration") != snapshot().configuration:
 		return false
 	if not state.get("ticks") is int or state.ticks < 0:
 		return false
