@@ -115,7 +115,7 @@ func _ready() -> void:
 	terrain.refresh_traffic(habitat)
 	add_child(vegetation)
 	vegetation.observer = camera
-	vegetation.build(land, water, groundcover, trees, terrain.data.get_height)
+	vegetation.build(land, water, groundcover, trees, terrain.data.get_surface_height)
 	vegetation.refresh_trees(_display_climate())
 	add_child(fungi_view)
 	fungi_view.configure(fungi)

@@ -78,7 +78,7 @@ func _parameter(key: String, value: Variant) -> void:
 func _process(_dt: float) -> void:
 	if terrain == null:
 		return
-	var height := terrain.data.get_height(observer.global_position)
+	var height := terrain.data.get_surface_height(observer.global_position)
 	visible = is_finite(height) and observer.global_position.y - height < VIEW_M
 	visible = visible and not terrain.material.get_shader_param("soil_layer_enabled")
 	if not visible:
@@ -161,7 +161,7 @@ func _patch(key: Vector2i) -> MultiMeshInstance3D:
 				0,
 				(key.y + (z + random.randf_range(.1, .9)) / GRID) * TILE_M
 			)
-			point.y = terrain.data.get_height(point)
+			point.y = terrain.data.get_surface_height(point)
 			if not is_finite(point.y):
 				point.y = -1000
 			var scale := Vector3(random.randf_range(.7, 1.15), random.randf_range(.65, 1.25), 1)

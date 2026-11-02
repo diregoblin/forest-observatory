@@ -195,7 +195,7 @@ func _run() -> void:
 		old_cards.material.set_shader_parameter("view_distance", 18.0)
 		old_cards.set_process(false)
 	world.turf_cards.set_process(false)
-	var point := Vector3(200, world.terrain.data.get_height(Vector3(200, 0, 196)), 196)
+	var point := Vector3(200, world.terrain.data.get_surface_height(Vector3(200, 0, 196)), 196)
 	world.camera.position = point + Vector3(1.5, 1.1, 2.5)
 	world.camera.look_at(point + Vector3(0, .24, 0))
 	var build_us := []

@@ -173,7 +173,7 @@ func refresh(climate: Dictionary) -> void:
 
 func _surface_height(point: Vector3) -> float:
 	if terrain != null:
-		return terrain.data.get_height(point)
+		return terrain.data.get_surface_height(point)
 	return habitat.plants.land.height_at(point.x, point.z)
 
 

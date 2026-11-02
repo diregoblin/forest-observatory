@@ -138,3 +138,13 @@ Do not format or patch the third-party addon as part of an application change.
   keep the blended pose for bounds/picking and never read models in `_animate`.
   Edit `build_animal_motion.py`, regenerate Blender/JSON and the Redot motion
   library together. `check_bird_flight` covers span, wrist attachment and fades.
+
+- Terrain3D 1.1 `get_height()` is a raw vertex lookup. For render-ground
+  placement use `get_surface_height()`; `check_terrain_upgrade` rejects the raw
+  lookup on a fractional analytical plane. Asset setters are
+  `set_texture_asset()` and `set_asset_name()` (the property is still `name`).
+  Keep the custom soil shader's MAX_REGIONS consistent with material limits.
+  The lightweight soil shader does not implement the native displacement
+  buffer: leave tessellation 0 in the shipped forest. Native displacement,
+  particle grass and static-level ocean are isolated render studies, not
+  authoritative soil/water changes or established performance improvements.

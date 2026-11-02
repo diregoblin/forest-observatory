@@ -38,10 +38,10 @@ func _run() -> void:
 	var previous := Shader.new()
 	previous.code = FileAccess.get_file_as_string(BEFORE)
 	assert(not previous.code.is_empty())
-	var point := Vector3(200, scene.terrain.data.get_height(Vector3(200, 0, 196)), 196)
+	var point := Vector3(200, scene.terrain.data.get_surface_height(Vector3(200, 0, 196)), 196)
 	scene.camera.position = point + Vector3(0, 1.65, 0)
 	var target := point + Vector3(0, 0, -40)
-	target.y = scene.terrain.data.get_height(target) + .5
+	target.y = scene.terrain.data.get_surface_height(target) + .5
 	scene.camera.look_at(target)
 	for frame in 45:
 		cards._process(0)

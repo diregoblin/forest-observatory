@@ -24,6 +24,8 @@ func configure(land: ForestLandscape, camera: Camera3D) -> void:
 	terrain.vertex_spacing = settings.extent / settings.terrain_resolution
 	terrain.mesh_size = 32
 	terrain.mesh_lods = 6
+	# The lightweight ecological material has no texture displacement.
+	terrain.tessellation_level = 0
 	terrain.collision_mode = 0
 	terrain.set_camera(camera)
 	var h := Image.create(
@@ -43,7 +45,7 @@ func configure(land: ForestLandscape, camera: Camera3D) -> void:
 				x, z, land.ground_color(x * terrain.vertex_spacing, z * terrain.vertex_spacing)
 			)
 	var texture := Terrain3DTextureAsset.new()
-	texture.name = "Лесная почва"
+	texture.set_asset_name("Лесная почва")
 	var tex := Image.create(128, 128, true, Image.FORMAT_RGBA8)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 47
@@ -58,7 +60,7 @@ func configure(land: ForestLandscape, camera: Camera3D) -> void:
 	normals.generate_mipmaps()
 	texture.normal_texture = ImageTexture.create_from_image(normals)
 	texture.uv_scale = .25
-	terrain.assets.set_texture(0, texture)
+	terrain.assets.set_texture_asset(0, texture)
 	terrain.data.import_images([h, null, color], Vector3.ZERO, 0.0, 1.0)
 	terrain.material.world_background = 0
 	terrain.material.shader_override = load("res://shaders/soil_ecology.gdshader")
