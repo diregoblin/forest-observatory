@@ -1426,7 +1426,7 @@ func _check_controls() -> void:
 	assert(ecology_clock.presentation_sample() == phase_before)
 	_process(0)  # Complete the retained tick before testing fresh speed requests.
 	# Same shared tick at all selected speeds; faster buttons need less wall time.
-	for speed in [1.0, 8.0, 60.0, 600.0]:
+	for speed in [1.0, 2.0, 4.0, 8.0]:
 		hud.speed_buttons[speed].pressed.emit()
 		assert(sim_speed == speed and hud.speed_buttons[speed].button_pressed)
 		var time_before := ecology_clock.elapsed_s
@@ -1435,8 +1435,8 @@ func _check_controls() -> void:
 		assert(absf(ecology_clock.elapsed_s - time_before - settings.ecology_step_s) < 1e-8)
 		assert(absf(water.clock - water_before - settings.ecology_step_s) < 1e-8)
 		_check_clock_alignment()
-	assert(hud.info.text.contains("Темп мира ×600"))
-	assert(hud.calendar_label.text.contains("Сутки 0.4 с · год 4.0 с"))
+	assert(hud.info.text.contains("Темп мира ×8"))
+	assert(hud.calendar_label.text.contains("Сутки 30.0 с · год 5.0 мин"))
 	# Deliberately overloaded request: neither calendar nor ecology may outrun water.
 	_process(1.0)
 	assert(ecology_clock.pending_s > settings.ecology_step_s)

@@ -85,8 +85,10 @@ func configure(settings: ForestSettings, animal_definitions: Array = []) -> void
 	pause_button.custom_minimum_size.x = 104
 	pause_button.tooltip_text = "Пауза / продолжить · Пробел"
 	var speed_group := ButtonGroup.new()
-	for speed in [1, 8, 60, 600]:
+	for speed in [1, 2, 4, 8]:
 		var button := _button(bar, "×" + str(speed), func(): speed_requested.emit(float(speed)))
+		button.custom_minimum_size.x = 44
+		button.alignment = HORIZONTAL_ALIGNMENT_CENTER
 		button.toggle_mode = true
 		button.button_group = speed_group
 		button.tooltip_text = "Общий темп воды, суток и года ×%d" % speed
