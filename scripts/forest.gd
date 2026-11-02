@@ -151,6 +151,7 @@ func _ready() -> void:
 		painterly_style.set_enabled(true)
 	add_child(water_view)
 	water_view.configure(water)
+	terrain.configure_bank_display(water_view)
 	add_child(turf_cards)
 	turf_cards.configure(terrain, camera, vegetation, water_view, painterly_style)
 	add_child(dam_view)
@@ -174,6 +175,7 @@ func _ready() -> void:
 	hud.dam_requested.connect(_toggle_dam)
 	hud.pause_requested.connect(_toggle_pause)
 	hud.frame_limit_requested.connect(_toggle_frame_limit)
+	hud.bank_relief_requested.connect(terrain.set_bank_relief_enabled)
 	hud.speed_requested.connect(_set_speed)
 	hud.view_requested.connect(_view)
 	hud.season_requested.connect(_cycle_season)
@@ -320,6 +322,7 @@ func _process(dt: float) -> void:
 		render_accum = fmod(render_accum, settings.water_display_interval_s)
 		water.sync_fields()
 		water_view.refresh()
+		terrain.sync_bank_water()
 	vegetation_accum += dt
 	if vegetation_accum >= .5 and habitat_display_tick != ecology_clock.ticks:
 		habitat_display_tick = ecology_clock.ticks

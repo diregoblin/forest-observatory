@@ -13,6 +13,7 @@ signal save_requested
 signal load_requested
 signal soil_layers_requested
 signal options_toggled(open: bool)
+signal bank_relief_requested(enabled: bool)
 
 var info: Label
 var journal: Label
@@ -23,6 +24,7 @@ var rain_button: Button
 var dam_button: Button
 var pause_button: Button
 var frame_limit_button: Button
+var bank_relief_button: CheckButton
 var style_button: Button
 var season_button: Button
 var calendar_label: Label
@@ -186,6 +188,11 @@ func _build_options(root: Control, settings: ForestSettings) -> void:
 		"Лимит 30 / 60 кадров в секунду. 30 FPS могут снизить нагрузку на видеокарту."
 		+ "\nПри нехватке производительности фактический темп мира может быть ниже выбранного."
 	)
+	bank_relief_button = CheckButton.new()
+	bank_relief_button.text = "Микрорельеф берегов"
+	bank_relief_button.tooltip_text = "Мелкие неровности сухого песка вблизи. Добавляет геометрию и нагрузку на GPU."
+	bank_relief_button.toggled.connect(func(enabled: bool): bank_relief_requested.emit(enabled))
+	graphics.add_child(bank_relief_button)
 	_label(graphics, "F — скрыть или вернуть весь интерфейс", 15, Color(.79, .84, .74))
 
 	var world := _options_page("Мир")

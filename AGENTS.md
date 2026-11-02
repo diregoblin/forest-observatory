@@ -144,7 +144,12 @@ Do not format or patch the third-party addon as part of an application change.
   lookup on a fractional analytical plane. Asset setters are
   `set_texture_asset()` and `set_asset_name()` (the property is still `name`).
   Keep the custom soil shader's MAX_REGIONS consistent with material limits.
-  The lightweight soil shader does not implement the native displacement
-  buffer: leave tessellation 0 in the shipped forest. Native displacement,
-  particle grass and static-level ocean are isolated render studies, not
-  authoritative soil/water changes or established performance improvements.
+  Default tessellation stays 0; the optional bank-quality setting uses level 2
+  and the native displacement atlas/geomorph (vertical offset bounded by 4 cm).
+  Cache only static world detail in that buffer: Terrain3D refreshes it on camera
+  snaps, not arbitrary uniform changes. Apply interpolated water/snow/habitat
+  masks live in the vertex shader and derive normals from the same masked field.
+  Call public `snap()` when enabling/reconfiguring a stationary buffer. Never
+  turn presentation displacement into an authoritative bank, ravine or obstacle.
+  Particle grass and static-level ocean remain isolated render studies, not
+  established performance improvements or ecological/hydrological replacements.

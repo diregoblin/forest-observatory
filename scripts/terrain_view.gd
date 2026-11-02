@@ -7,6 +7,40 @@ var ecology_previous: ImageTexture
 var ecology_current: ImageTexture
 var ecology_display_s := 1.0
 var ground_greenness := -1.0
+var bank_relief_enabled := false
+var bank_water_view: ForestWaterView
+const BANK_MAX_OFFSET_M := .04
+
+
+func configure_bank_display(water_view: ForestWaterView) -> void:
+	# Read submitted display textures only, including while the model worker runs.
+	bank_water_view = water_view
+
+
+func set_bank_relief_enabled(enabled: bool) -> void:
+	if bank_relief_enabled == enabled:
+		return
+	bank_relief_enabled = enabled
+	material.set_shader_param("bank_relief_enabled", enabled)
+	# Native tessellation is global even though displacement is masked. Keep this
+	# an explicit quality option, never rebuild clipmaps when crossing a sand patch.
+	tessellation_level = 2 if enabled else 0
+	displacement_scale = BANK_MAX_OFFSET_M
+	if enabled:
+		sync_bank_water()
+		# Buffer uniforms/shaders alone do not invalidate a stationary native cache.
+		snap()
+
+
+func sync_bank_water() -> void:
+	if not bank_relief_enabled or bank_water_view == null:
+		return
+	var display := bank_water_view.material_override
+	material.set_shader_param("bank_water_current", display.get_shader_parameter("depth_map"))
+	material.set_shader_param(
+		"bank_water_previous", display.get_shader_parameter("previous_depth_map")
+	)
+	material.set_shader_param("bank_water_blend", display.get_shader_parameter("display_alpha"))
 
 
 func set_surface_season(climate: Dictionary) -> void:
@@ -24,7 +58,7 @@ func configure(land: ForestLandscape, camera: Camera3D) -> void:
 	terrain.vertex_spacing = settings.extent / settings.terrain_resolution
 	terrain.mesh_size = 32
 	terrain.mesh_lods = 6
-	# The lightweight ecological material has no texture displacement.
+	# The optional bank-quality setting enables only near native tessellation.
 	terrain.tessellation_level = 0
 	terrain.collision_mode = 0
 	terrain.set_camera(camera)
@@ -65,6 +99,8 @@ func configure(land: ForestLandscape, camera: Camera3D) -> void:
 	terrain.material.world_background = 0
 	terrain.material.shader_override = load("res://shaders/soil_ecology.gdshader")
 	terrain.material.shader_override_enabled = true
+	terrain.material.buffer_shader_override = load("res://shaders/bank_buffer.gdshader")
+	terrain.material.buffer_shader_override_enabled = true
 	terrain.material.set_shader_param("ecology_extent", settings.extent)
 	# Shared, CPU-baked micro-turf: two mipmapped maps, no grass mesh instances
 	# or authoritative ecology changes. The mask remains in the terrain shader.
@@ -109,6 +145,7 @@ func refresh_ecology(soil: ForestSoil, water: ForestWatershed, cover: ForestGrou
 
 
 func advance_ecology_display(dt: float) -> void:
+	sync_bank_water()
 	ecology_display_s = minf(1, ecology_display_s + dt)
 	material.set_shader_param("ecology_blend", ecology_display_s)
 

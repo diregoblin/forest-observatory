@@ -6,7 +6,7 @@ render_mode blend_mix,depth_draw_opaque,cull_back,diffuse_burley,specular_schlic
 
 /* This is an example stripped down shader with maximum performance in mind.
  * Only Autoshader/Base/Over/Blend/Holes/Colormap are supported.
- * Displacement is not enabled. Mesh Tesselation level must be set to 0.
+ * Optional bank displacement uses the native buffer and its clipmap geomorph.
  * All terrain normal calculations take place in vertex().
  *
  * Control map indices are processed such that each ID only requires reading ONCE.
@@ -59,6 +59,11 @@ uniform sampler2D rooting_map : filter_linear, repeat_disable;
 uniform float snow_water_m = 0.0;
 uniform bool soil_layer_enabled = false;
 uniform sampler2D soil_layer_map : source_color, filter_nearest, repeat_disable;
+// Optional presentation microrelief. Dynamic masks are NOT cached in the buffer.
+uniform bool bank_relief_enabled = false;
+uniform highp sampler2D bank_water_current : filter_linear, repeat_disable;
+uniform highp sampler2D bank_water_previous : filter_linear, repeat_disable;
+uniform float bank_water_blend = 1.0;
 
 // Defined Constants
 #define MAX_REGIONS 1024 // Match Terrain3DMaterial.max_regions. Set to 64-256 for mobile
@@ -87,6 +92,8 @@ uniform uint _mouse_layer = 0x80000000u; // Layer 32
 uniform float _vertex_spacing = 1.0;
 uniform float _vertex_density = 1.0; // = 1./_vertex_spacing
 uniform float _subdiv = 1.0;
+uniform float _displacement_scale = 0.04;
+uniform highp sampler2D _displacement_buffer : repeat_disable, filter_linear;
 uniform float _region_size = 1024.0;
 uniform float _region_texel_size = 0.0009765625; // = 1./region_size
 uniform int _region_map_size = 32;
@@ -233,6 +240,30 @@ float interpolated_height(vec2 pos) {
 	return h;
 }
 
+// Native Terrain3D 1.1 displacement atlas lookup. Coarse levels tend to zero
+// through the same geomorph as the base height, avoiding a near-detail ring.
+float bank_height(vec2 pos, float scale) {
+	float level = floor(log2(1.0 / (scale * _vertex_density)));
+	if (level < 1.0 || _subdiv < 2.0) { return 0.0; }
+	float density = exp2(level) * .5;
+	vec2 uv = (density * pos - round(_target_pos.xz * _vertex_density * density))
+		/ (_mesh_size * 2.0) + .5;
+	uv.x = (uv.x + level - 1.0) / log2(_subdiv);
+	if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) { return 0.0; }
+	vec2 world_uv = pos * _vertex_spacing / ecology_extent;
+	float sand = smoothstep(.35, .85, textureLod(habitat_map, world_uv, 0.0).a);
+	float depth = mix(textureLod(bank_water_previous, world_uv, 0.0).r,
+		textureLod(bank_water_current, world_uv, 0.0).r, bank_water_blend);
+	float dry = 1.0 - smoothstep(.0001, .008, depth);
+	float exposed = 1.0 - smoothstep(.0001, .006, snow_water_m);
+	return (textureLod(_displacement_buffer, uv, 0.0).g * 2.0 - 1.0)
+		* _displacement_scale * sand * dry * exposed;
+}
+
+float bank_morph(vec2 start, vec2 end, float scale, float morph) {
+	return mix(bank_height(start, scale), bank_height(end, scale * 2.0), morph);
+}
+
 void vertex() {
 	// Save Camera Position to varying for access in later functions
 	v_camera_pos = MAIN_CAM_INV_VIEW_MATRIX[3].xyz;
@@ -307,8 +338,24 @@ void vertex() {
 		v_normal = normalize(vec3(h - u, _vertex_spacing, h - v));
 	}
 
-	// Convert model space to view space w/ skip_vertex_transform render mode
-	VERTEX = (VIEW_MATRIX * vec4(v_vertex, 1.0)).xyz;
+	vec3 displacement = vec3(0.0);
+	if (bank_relief_enabled && _subdiv > 1.0 && !soil_layer_enabled &&
+			!(CAMERA_VISIBLE_LAYERS == _mouse_layer)) {
+		displacement.y = bank_morph(start_pos, end_pos, scale, vertex_lerp);
+		// Derive smooth normals from the SAME masked, LoD-morphed field. Water
+		// interpolation cannot leave old geometry or normals in a cached buffer.
+		float e = max(scale, _vertex_spacing / _subdiv);
+		vec2 dx = vec2(e * _vertex_density, 0.0);
+		vec2 dz = dx.yx;
+		float gx = (bank_morph(start_pos+dx, end_pos+dx, scale, vertex_lerp)
+			- bank_morph(start_pos-dx, end_pos-dx, scale, vertex_lerp)) / (2.0 * e);
+		float gz = (bank_morph(start_pos+dz, end_pos+dz, scale, vertex_lerp)
+			- bank_morph(start_pos-dz, end_pos-dz, scale, vertex_lerp)) / (2.0 * e);
+		v_normal = normalize(vec3(v_normal.x / v_normal.y - gx, 1.0,
+			v_normal.z / v_normal.y - gz));
+	}
+	// Keep v_vertex and model-field UVs undisplaced. This is decoration only.
+	VERTEX = (VIEW_MATRIX * vec4(v_vertex + displacement, 1.0)).xyz;
 
 	// Apply terrain normals
 	vec3 w_tangent = normalize(cross(v_normal, vec3(0.0, 0.0, 1.0)));
