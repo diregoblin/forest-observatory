@@ -106,3 +106,14 @@ func view_plot(center: Vector2) -> void:
 	self.look_at(target)
 	yaw = self.rotation.y
 	pitch = self.rotation.x
+
+
+func view_spring() -> void:
+	stop_following()
+	var head := land.spring_position()
+	var z := head.y + 17.0
+	var x := land.ravine_x(z) + 3.0
+	position = Vector3(x, land.height_at(x, z) + 4.0, z)
+	look_at(Vector3(head.x, land.height_at(head.x, head.y) + .2, head.y))
+	yaw = rotation.y
+	pitch = rotation.x

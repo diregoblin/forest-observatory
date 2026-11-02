@@ -4,6 +4,7 @@ extends RefCounted
 ## Native local-inertial surface flow + two-layer bucket soil, all in SI.
 ## Public arrays are read-only snapshots, never the authoritative reserves.
 var source_indices := PackedInt32Array()
+var source_flow_m3_s := PackedFloat64Array()  # Per-cell external input, m³/s.
 var config: ForestSettings
 var resolution: int
 var cell_size: float
@@ -45,6 +46,7 @@ func _init(land: ForestLandscape) -> void:
 	bed.resize(resolution * resolution)
 	depth.resize(resolution * resolution)
 	soil.resize(resolution * resolution)
+	source_flow_m3_s.resize(resolution * resolution)
 	for j in resolution:
 		for i in resolution:
 			var k := j * resolution + i
@@ -62,11 +64,25 @@ func _init(land: ForestLandscape) -> void:
 				if d < 10.0
 				else 0.0
 			)
+			depth[k] = maxf(depth[k], landscape.initial_spring_depth(x, z))
 			soil[k] = 0.4 + 0.4 * exp(-d / 22.0)
 	assert(
 		not source_indices.is_empty(),
 		"Grid misses headwater source; refine resolution or widen source"
 	)
+	for k in source_indices:
+		source_flow_m3_s[k] = config.headwater_m3_s / source_indices.size()
+	if config.spring_enabled:
+		var spring := landscape.spring_position()
+		var k := index_at(spring.x, spring.y)
+		source_flow_m3_s[k] += config.spring_flow_m3_s
+		if not source_indices.has(k):
+			source_indices.append(k)
+	var weights := PackedFloat64Array()
+	var source_total := 0.0
+	for k in source_indices:
+		weights.append(source_flow_m3_s[k])
+		source_total += source_flow_m3_s[k]
 	assert(native != null, "Build native hydrology with tools/build_hydro.sh")
 	var profile := config.soil_profile
 	var options := {
@@ -76,7 +92,8 @@ func _init(land: ForestLandscape) -> void:
 		"theta": config.water_theta,
 		"max_froude": config.max_froude,
 		"rain_m_s": config.rainfall_m_s,
-		"source_m3_s": config.headwater_m3_s,
+		"source_m3_s": source_total,
+		"source_weights": weights,
 		"soil_interval_s": config.soil_interval_s,
 		"top_m": profile.top_depth_m,
 		"root_m": profile.root_depth_m,
@@ -179,7 +196,9 @@ func _rebuild_crests() -> void:
 
 
 func step(dt: float, copy_fields := true, liquid_m_s := -1.0) -> void:
-	var ok: bool = native.advance(dt, raining) if liquid_m_s < 0 else native.advance_forced(dt, liquid_m_s)
+	var ok: bool = (
+		native.advance(dt, raining) if liquid_m_s < 0 else native.advance_forced(dt, liquid_m_s)
+	)
 	assert(ok, "Native hydrology advance failed")
 	clock += dt
 	if copy_fields:
@@ -256,6 +275,9 @@ func load_state(path: String) -> bool:
 		saved.get("n") != resolution
 		or saved.get("dx") != cell_size
 		or saved.get("options") != current.options
+		or saved.get("bed") != current.bed
+		or saved.get("sources") != current.sources
+		or saved.get("source_weights") != current.source_weights
 	):
 		return false
 	var restored_barriers: Array[ForestBarrier] = []

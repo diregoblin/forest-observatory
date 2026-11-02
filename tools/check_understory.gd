@@ -17,6 +17,7 @@ func chamber(
 	settings.fungi_plot_centers = PackedVector2Array([Vector2(.375, .557)])
 	settings.fungi_initial_age_s = 0
 	settings.headwater_m3_s = 0
+	settings.spring_enabled = false
 	settings.headwater_length = 512
 	settings.headwater_width = 512
 	settings.evaporation_m_s = 0

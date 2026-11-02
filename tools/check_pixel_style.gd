@@ -62,6 +62,9 @@ func _run() -> void:
 	world.hud.set_paused(true)
 	world._finish_model_work(true)
 	var style = world.painterly_style
+	assert(not style.debug_controls_enabled and not world.hud.style_button.visible)
+	style.debug_controls_enabled = true
+	world.hud.style_button.show()  # Explicitly opt into internal renderer controls.
 	var renderer = style.pixel_renderer
 	assert(RenderingServer.get_current_rendering_method() == "forward_plus")
 	report.renderer = RenderingServer.get_current_rendering_method()

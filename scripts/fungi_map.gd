@@ -67,6 +67,6 @@ func refresh() -> void:
 		biomass_texture.update(images[0])
 		resource_texture.update(images[1])
 	label.text = (
-		"МИЦЕЛИЙ / РЕСУРС · G\nУчасток %.0f м · шаг %.2f м\nСверху: мицелий · снизу: питание"
+		"ГРИБНОЙ УЧАСТОК 1 · G закрыть\n%.0f м · шаг %.2f м · кг C/м²\nСверху: мицелий · снизу: питание"
 		% [n * config.fungi_cell_m, config.fungi_cell_m]
 	)

@@ -14,6 +14,12 @@ extends Resource
 @export var headwater_m3_s := 2.0
 @export var headwater_length := 12.0
 @export var headwater_width := 14.0
+@export var spring_enabled := true
+@export var spring_fraction := Vector2(.34, .18)
+@export var spring_mouth_fraction := .37
+@export var spring_flow_m3_s := .04  # External catchment inflow, not free groundwater.
+@export var ravine_depth_m := 8.0
+@export var ravine_half_width_m := 14.0
 @export var soil_interval_s := 30.0
 @export var soil_profile: ForestSoilProfile = preload("res://data/soils/loam.tres")
 @export var evaporation_m_s := 0.12 / 1000.0 / 3600.0
@@ -61,6 +67,10 @@ func validate() -> void:
 	assert(water_cfl > 0 and water_cfl <= .5 and manning_n > 0)
 	assert(water_theta >= 0 and water_theta <= 1 and max_froude > 0)
 	assert(rainfall_m_s >= 0 and headwater_m3_s >= 0 and evaporation_m_s >= 0)
+	assert(is_finite(spring_flow_m3_s) and spring_flow_m3_s >= 0)
+	assert(spring_fraction.x > 0 and spring_fraction.x < 1)
+	assert(spring_fraction.y > 0 and spring_fraction.y < spring_mouth_fraction)
+	assert(spring_mouth_fraction < 1 and ravine_depth_m > 0 and ravine_half_width_m > 0)
 	assert(soil_interval_s > 0 and water_display_interval_s > 0)
 	soil_profile.validate()
 	assert(ecology_interval > 0 and growth_per_tick > 0)

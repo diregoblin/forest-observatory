@@ -1,4 +1,6 @@
-# Species resources
+# Ресурсы видов
+
+Техническая справка для изменения ресурсов и кода. Для первого знакомства: [прогулка](guide.md), [описание моделей](models.md).
 
 All **29** plants are plain `ForestPlantDefinition` resources in `data/plants/`,
 listed in `data/forest.tres`. They use one model and mesh builder. Repeated geometric

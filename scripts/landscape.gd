@@ -64,6 +64,51 @@ func channel_x(z: float) -> float:
 
 
 func height_at(x: float, z: float) -> float:
+	var base := _base_height(x, z)
+	if not settings.spring_enabled:
+		return base
+	var head := spring_position()
+	var mouth := spring_mouth()
+	if z < head.y - 12.0 or z > mouth.y + 12.0:
+		return base
+	var t := clampf((z - head.y) / (mouth.y - head.y), 0, 1)
+	var cross := absf(x - ravine_x(z))
+	if cross >= settings.ravine_half_width_m:
+		return base
+	var head_floor := _base_height(head.x, head.y) - settings.ravine_depth_m
+	var mouth_floor := _base_height(mouth.x, mouth.y)
+	var floor_height := lerpf(head_floor, mouth_floor, t)
+	var cut := 1.0 - smoothstep(2.0, settings.ravine_half_width_m, cross)
+	cut *= smoothstep(head.y - 12.0, head.y, z)
+	cut *= 1.0 - smoothstep(mouth.y, mouth.y + 12.0, z)
+	# The shared landscape changes the actual solver bed, not a decorative mesh.
+	return minf(base, lerpf(base, floor_height, cut))
+
+
+func spring_position() -> Vector2:
+	return settings.spring_fraction * settings.extent
+
+
+func spring_mouth() -> Vector2:
+	var z := settings.spring_mouth_fraction * settings.extent
+	return Vector2(channel_x(z), z)
+
+
+func ravine_x(z: float) -> float:
+	var head := spring_position()
+	var mouth := spring_mouth()
+	var t := clampf((z - head.y) / (mouth.y - head.y), 0, 1)
+	return lerpf(head.x, mouth.x, t) - settings.extent * .012 * sin(PI * t)
+
+
+func initial_spring_depth(x: float, z: float) -> float:
+	if not settings.spring_enabled or z < spring_position().y or z > spring_mouth().y:
+		return 0.0
+	# Declared initial stream storage, included in the initial water ledger.
+	return .12 * (1.0 - smoothstep(1.5, 4.0, absf(x - ravine_x(z))))
+
+
+func _base_height(x: float, z: float) -> float:
 	var d := absf(x - channel_x(z))
 	var hills := noise.get_noise_2d(x, z)
 	var relief := pow(d / 100.0, 1.55) * 14.0

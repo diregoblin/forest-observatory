@@ -9,6 +9,7 @@ func chamber(saturation: float, surface := 0.0) -> Dictionary:
 	settings.water_step = 5
 	settings.start_day = 200
 	settings.headwater_m3_s = 0
+	settings.spring_enabled = false
 	settings.headwater_length = 512
 	settings.headwater_width = 512
 	settings.evaporation_m_s = 0

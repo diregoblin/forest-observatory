@@ -14,6 +14,7 @@ func fixture(bird := false) -> Dictionary:
 	s.headwater_length = s.extent
 	s.headwater_width = s.extent
 	s.headwater_m3_s = 0
+	s.spring_enabled = false
 	s.start_day = 150
 	var plant: ForestPlantDefinition = load("res://data/plants/rowan.tres").duplicate(true)
 	plant.stress_days = 1e8

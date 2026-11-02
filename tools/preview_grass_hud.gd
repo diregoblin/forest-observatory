@@ -104,6 +104,12 @@ func _run() -> void:
 	world = load("res://main.tscn").instantiate()
 	world.paused = true
 	root.add_child(world)
+	assert(not world.painterly_style.debug_controls_enabled and not world.hud.style_button.visible)
+	var normal_mode: int = world.painterly_style.mode
+	await key(KEY_F8)
+	assert(world.painterly_style.mode == normal_mode, "Hidden renderer modes must ignore F8")
+	world.painterly_style.debug_controls_enabled = true
+	world.hud.style_button.show()  # Deliberate developer-only renderer exercise.
 	world._finish_model_work(true)
 	world.set_process(false)
 	world.camera.set_process(false)
@@ -163,8 +169,21 @@ func _run() -> void:
 	await native_popup_key("Return")
 	assert(world.camera.position != creek_camera)
 	assert(not popup.visible)
+	await click(world.hud.view_selector.get_global_rect().get_center())
+	# Arrow navigation also establishes native popup focus after reopening.
+	for item in popup.get_item_count():
+		await native_popup_key("Down")
+		if popup.get_focused_item() == popup.get_item_count() - 1:
+			break
+	assert(popup.get_item_text(popup.get_focused_item()).ends_with("Тихий ключ"))
+	await native_popup_key("Return")
+	assert(not popup.visible and world.observation.selected.is_empty())
+	var head: Vector2 = world.land.spring_position()
+	assert(Vector2(world.camera.position.x, world.camera.position.z).distance_to(head) < 30)
+	await key(KEY_M)
+	assert(not world.hud.soil_layers.visible and not world.hud.fungi_map.visible)
 	# Map buttons close the modal menu and reveal the requested overlay.
-	for index in 3:
+	for index in 2:
 		await click(world.hud.options_button.get_global_rect().get_center())
 		await tab(2)
 		var page: ScrollContainer = world.hud.options_tabs.get_tab_control(2)
@@ -172,9 +191,9 @@ func _run() -> void:
 		var button: Button = map_buttons.get_child(index)
 		await click(button.get_global_rect().get_center())
 		assert(not world.hud.options_overlay.visible)
-		var layers := [world.hud.hydro_map, world.hud.fungi_map, world.hud.soil_layers]
+		var layers := [world.hud.fungi_map, world.hud.soil_layers]
 		assert(layers[index].visible)
-		await key([KEY_M, KEY_G, KEY_V][index])
+		await key([KEY_G, KEY_V][index])
 		assert(not layers[index].visible)
 	assert(models() == frozen)
 	report.menu_input = "mouse, tab clicks, Esc, no world picking/flight/hotkey leakage"

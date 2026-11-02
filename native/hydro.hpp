@@ -33,6 +33,9 @@ public:
     // Last east/south faces are walls; south outlet is accounted separately.
     std::vector<double> qx, qz, crest_x, crest_z;
     std::vector<int> sources;
+    // Relative, nonnegative source weights. Total inflow is p.source_m3_s.
+    std::vector<double> source_weights;
+    double source_weight_sum = 0, max_source_fraction = 0;
     double initial_m3 = 0, input_m3 = 0, outlet_m3 = 0;
     double evaporated_m3 = 0, deep_drain_m3 = 0, infiltrated_m3 = 0;
     double recharged_m3 = 0, seeped_m3 = 0, transpired_m3 = 0;
@@ -43,7 +46,8 @@ public:
                     const std::vector<double> &initial_depth,
                     const std::vector<double> &saturation,
                     const std::vector<int> &source_cells,
-                    const std::vector<double> &initial_groundwater = {});
+                    const std::vector<double> &initial_groundwater = {},
+                    const std::vector<double> &weights = {});
     bool advance(double duration_s, bool rain);
     double surface_m3() const;
     double soil_m3() const; // includes water reserved between soil ticks

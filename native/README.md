@@ -37,6 +37,13 @@ native/build-core/fungi_checks
 
 ## Numerical contract
 
+The current valley uses 2 m³/s main headwater plus a separate 0.04 m³/s side
+spring. Per-source weights preserve this split. Both are external boundary inputs,
+not groundwater created for free. The ravine is part of the analytical bed; a
+300 s dry source-only assay and source-off null live in `tools/check_spring.gd`.
+The whole-world configuration now rejects the old bed without altering old saves.
+
+
 - Cell-centred `bed`, `depth`: m. `qx/qz`: face discharge per width, m²/s.
   Transfers are `q * dt * face_width` in m³; source input is m³/s independent
   of source-cell count; areal rain/evaporation/infiltration are m/s.
@@ -109,7 +116,7 @@ surface + top + root + pending + groundwater + outlet + evaporation + deep_drain
 Infiltration/percolation are internal transfers and are not added as external
 losses. Save/restore includes both q histories, pending storage/demand, the partial
 soil clock, parameters, crests and cumulative ledger. Restore validates a candidate
-before replacing the running core. Native checkpoint version 2 adds groundwater, seepage and transpiration. Native
+before replacing the running core. Native checkpoint version 3 adds nonnegative per-source weights (normalized over total source input). Version 2 added groundwater, seepage and transpiration. Old v1/v2 snapshots without weights retain uniform source distribution; v3 validates weights and their sum atomically. The CFL source bound uses the largest normalized fraction. Native
 v1 import retains the old external-drain physics; the world wrapper rejects
 configuration mismatches rather than silently changing saved physics.
 The GDScript file API saves **hydrology only**,
@@ -132,8 +139,8 @@ checks, not physical convergence of the actual forest watershed. The benchmark
 measures CPU core only; `artifacts/runtime.json` measures the rendered scene.
 
 Still pending: an offline Landlab comparison, real-world calibration, Green–Ampt,
-spatially varying soil profiles, surface-stage groundwater coupling, physically driven
-water ripples/shoreline reconstruction and the point inspector. GPU computation
+spatially varying soil profiles, surface-stage groundwater coupling and physically driven
+water ripples/shoreline reconstruction. A read-only point inspector is now available in V. GPU computation
 has not been implemented. Soil rates and climate are plausible scenario inputs,
 not field measurements or validated ecological parameters.
 
@@ -141,7 +148,7 @@ not field measurements or validated ecological parameters.
 
 `Fungi` (`fungi.hpp/.cpp`) is a separate native float64 model sharing the existing
 extension build, not hydrology state. `ForestFungiNative` exposes batch forcing,
-fields, metrics and atomic version-1 snapshots. Four areal carbon stores use
+fields, metrics and versioned atomic snapshots (standalone and soil-coupled contracts differ). Four areal carbon stores use
 kg C/m²: available resource, mycelium, finite organic reserve, fruiting biomass.
 Only resource and biomass diffuse. The positive five-point stencil has reflecting
 boundaries and `dt <= .225 dx²/max(D)`. Reaction substeps limit resource turnover;
@@ -156,9 +163,14 @@ Default yield=1 has no respiratory loss; this intentionally matches the chosen
 paper kinetics, not a calibrated ecosystem carbon-use efficiency.
 
 The resource is a lumped available carbon substrate, **not mineral nitrogen or
-phosphorus**. Vegetation does not yet donate litter or compete for this pool.
+phosphorus**. The modes above describe the standalone reference. In the current
+coupled forest, R/L are mirrors of the single shared soil owner, not independent
+stores: vegetation supplies litter and competes for finite C/N/P. Mycelium and
+fruit are fungal-owned; mortality returns elements to the soil. ECM fungi trade
+finite nutrients for actual host carbon, not the saprotrophic uptake channel.
 Moisture is read-only coarse-grid forcing, not fungal water uptake. Biological
-seconds follow the existing independent ecosystem clock, not water speed.
+seconds are a configured multiple of completed water time. See the shared-soil
+section below and [the current model guide](../docs/models.md).
 
 `fungi_checks` covers the independently calculated homogeneous paper RHS,
 no-inoculum and no-resource nulls, no-spread counterexample, diffusion/carbon

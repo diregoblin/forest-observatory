@@ -41,8 +41,8 @@ static func run_world(world) -> void:
 	assert(world.vegetation.visible and not world.water_view.visible)
 	world.hud.soil_layers.hide_cover.button_pressed = true
 	assert(not world.vegetation.visible)
-	world.hud.toggle_map()
-	assert(not world.hud.soil_layers.visible and world.hud.hydro_map.visible)
+	world._toggle_soil_layers()
+	assert(not world.hud.soil_layers.visible)
 	assert(world.vegetation.visible and not world.water_view.visible)
 	assert(not world.terrain.material.get_shader_param("soil_layer_enabled"))
 	assert(world.atmosphere.world_env.fog_enabled == fog)
@@ -116,6 +116,13 @@ func _run() -> void:
 			var original: PackedFloat64Array = water.get(layer.water)
 			for k in values.size():
 				assert(values[k] == original[k] * 1000, "Metres to mm, never saturation")
+		elif layer.has("rate"):
+			for k in values.size():
+				assert(values[k] == water.seepage_m_s[k] * 3600000.0)
+		elif layer.has("sources"):
+			assert(
+				absf(sum_field(values) / 1000 - water.native.snapshot().options.source_m3_s) < 1e-12
+			)
 		else:
 			var expected := owned_total(saved, layer.key)
 			var actual := sum_field(values) / 1000 * water.cell_area

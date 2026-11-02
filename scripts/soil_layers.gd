@@ -20,12 +20,18 @@ const LAYERS := [
 	{"title": "Минеральный N", "field": 6, "limit": 60.0, "key": "mineral_n"},
 	{"title": "Минеральный P", "field": 7, "limit": 6.0, "key": "mineral_p"},
 	{"title": "Свежий опад · C", "field": 8, "limit": 500.0, "key": "surface_c"},
+	{"title": "Поверхностная вода", "water": "depth", "limit": 1000.0},
+	{"title": "Выход грунтовой воды", "rate": "seepage_m_s", "limit": 10.0, "units": "мм/ч"},
+	{"title": "Источники воды", "sources": true, "limit": 250.0, "units": "л/с"},
 ]
+const SURFACE_WATER := 12
+const SEEPAGE := 13
+const SOURCES := 14
 const LOW := Color(.075, .09, .23)
 const MID := Color(.06, .60, .57)
 const HIGH := Color(.98, .86, .22)
 
-var selected := 0
+var selected := SURFACE_WATER
 var values := PackedFloat64Array()
 var limit := 1.0
 var units := "мм"
@@ -57,10 +63,11 @@ func configure() -> void:
 	box.add_theme_constant_override("separation", 6)
 	add_child(box)
 	var title := Label.new()
-	title.text = "ПОЧВЕННЫЕ СЛОИ · V закрыть"
+	title.text = "СЛОИ ВОДЫ И ПОЧВЫ · V закрыть"
 	box.add_child(title)
 	for layer in LAYERS:
 		selector.add_item(layer.title)
+	selector.select(selected)
 	selector.item_selected.connect(func(index: int): layer_requested.emit(index))
 	box.add_child(selector)
 	hide_cover.text = "Скрыть лес и поверхностную воду"
@@ -101,6 +108,8 @@ func configure() -> void:
 		"Вода: эквивалентный слой, не влажность.\n"
 		+ "C/N/P: запас элемента, не концентрация.\n"
 		+ "Опад — часть органического C.\n"
+		+ "Источники: заданный приток извне.\n"
+		+ "Выход грунтовой воды: расчётный поток.\n"
 		+ "Цвет обрезан по шкале; числа — нет."
 	)
 	note.add_theme_font_size_override("font_size", 13)
@@ -112,20 +121,26 @@ static func field_values(
 	index: int, soil: ForestSoil, water: ForestWatershed
 ) -> PackedFloat64Array:
 	var layer: Dictionary = LAYERS[index]
-	var field: PackedFloat64Array = (
-		water.get(layer.water).duplicate()
-		if layer.has("water")
-		else soil.native.diagnostic_field(layer.field)
-	)
+	var field: PackedFloat64Array
+	var factor := 1000.0  # Water m→mm, stocks kg/m²→g/m², source m³/s→L/s.
+	if layer.has("water"):
+		field = water.get(layer.water).duplicate()
+	elif layer.has("rate"):
+		field = water.get(layer.rate).duplicate()
+		factor = 3600000.0  # m/s → mm/h.
+	elif layer.has("sources"):
+		field = water.source_flow_m3_s.duplicate()
+	else:
+		field = soil.native.diagnostic_field(layer.field)
 	# Explicitly detach packed arrays before converting public water snapshots.
 	for k in field.size():
-		field[k] *= 1000.0
+		field[k] *= factor
 	return field
 
 
 static func scale_limit(index: int, profile: ForestSoilProfile) -> float:
 	var layer: Dictionary = LAYERS[index]
-	if layer.has("water"):
+	if layer.has("capacity"):
 		var fraction := profile.specific_yield if index == 2 else profile.porosity
 		return profile.get(layer.capacity) * fraction * 1000.0
 	return layer.limit
@@ -143,7 +158,7 @@ func refresh(soil: ForestSoil, water: ForestWatershed) -> void:
 	resolution = water.resolution
 	cell_size = water.cell_size
 	limit = scale_limit(selected, water.config.soil_profile)
-	units = "мм" if LAYERS[selected].has("water") else "г/м²"
+	units = LAYERS[selected].get("units", "мм" if LAYERS[selected].has("water") else "г/м²")
 	var image := Image.create(resolution, resolution, false, Image.FORMAT_RGBA8)
 	var minimum := INF
 	var maximum := -INF

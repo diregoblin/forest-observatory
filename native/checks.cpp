@@ -67,6 +67,31 @@ int main(int argc,char **argv) {
     std::cout<<std::setprecision(15);
     try {
         if(argc>1 && std::string(argv[1])=="--benchmark") { benchmark(); return 0; }
+        // Unequal point sources: independent volumes, summed external ledger,
+        // invalid/duplicate inputs and backwards-compatible uniform fallback.
+        {
+            auto sp=isolated(); sp.source_m3_s=4;
+            Hydro weighted;
+            require(weighted.initialize(4,2,sp,std::vector<double>(16),std::vector<double>(16),
+                std::vector<double>(16),{5,10},{},{1,3}),"weighted sources initialize");
+            std::fill(weighted.crest_x.begin(),weighted.crest_x.end(),1e6);
+            std::fill(weighted.crest_z.begin(),weighted.crest_z.end(),1e6);
+            require(weighted.advance(5,false),"weighted sources advance");
+            require(std::abs(weighted.depth[5]*4-5)<1e-12,"first source exact cubic metres");
+            require(std::abs(weighted.depth[10]*4-15)<1e-12,"second source exact cubic metres");
+            require(std::abs(weighted.input_m3-20)<1e-12,"source total independent of cell count");
+            balanced(weighted);
+            Hydro candidate;
+            require(!candidate.initialize(4,2,sp,std::vector<double>(16),std::vector<double>(16),
+                std::vector<double>(16),{5,10},{},{0,0}),"zero source weights rejected");
+            require(!candidate.initialize(4,2,sp,std::vector<double>(16),std::vector<double>(16),
+                std::vector<double>(16),{5,10},{},{1,-1}),"negative source weights rejected");
+            require(!candidate.initialize(4,2,sp,std::vector<double>(16),std::vector<double>(16),
+                std::vector<double>(16),{5,5},{},{1,1}),"duplicate cells rejected for source CFL bound");
+            require(candidate.initialize(4,2,sp,std::vector<double>(16),std::vector<double>(16),
+                std::vector<double>(16),{5,10}),"legacy uniform sources initialize");
+            require(candidate.max_source_fraction==.5,"uniform source CFL fraction");
+        }
         // A fully wet lake with exactly equal free-surface elevation over uneven bed.
         auto p=isolated(); Hydro lake;
         const int n=12; std::vector<double> bed(n*n),depth(n*n),sat(n*n,0.5);

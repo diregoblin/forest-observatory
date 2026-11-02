@@ -41,6 +41,13 @@ static func run(world) -> void:
 		world._restore_world(saved), "Loading waits for old work before restoring all participants"
 	)
 	assert(world._world_snapshot().models == saved.models)
+	world._process(world.settings.ecology_step_s / world.sim_speed)
+	assert(world.model_work_active)
+	world.hud.fungi_map_requested.emit()
+	assert(not world.model_work_active and world.hud.fungi_map.visible)
+	world._check_clock_alignment()
+	world.hud.fungi_map_requested.emit()
+	assert(not world.hud.fungi_map.visible)
 	world.use_model_worker = false
 	assert(world._restore_world(initial))
 	(
@@ -55,6 +62,7 @@ static func run(world) -> void:
 						"same_16_ticks_as_sync_reference": true,
 						"pause_commits_in_flight_tick": true,
 						"save_load_join_worker": true,
+						"fungi_map_joins_busy_worker": true,
 						"boundary":
 						"Single owned worker, no partial model reads by the scene; no concurrent model writers"
 					},

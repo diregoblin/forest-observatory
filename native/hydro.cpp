@@ -20,21 +20,35 @@ bool Parameters::valid() const {
 bool Hydro::initialize(int size, double cell_m, const Parameters &params,
         const std::vector<double> &elevation, const std::vector<double> &initial_depth,
         const std::vector<double> &saturation, const std::vector<int> &source_cells,
-        const std::vector<double> &initial_groundwater) {
+        const std::vector<double> &initial_groundwater, const std::vector<double> &weights) {
     if (size < 2 || size > 4096 || !std::isfinite(cell_m) || cell_m <= 0 || !params.valid()) return false;
     const auto count = static_cast<std::size_t>(size) * size;
     if (elevation.size() != count || initial_depth.size() != count || saturation.size() != count) return false;
     for (std::size_t k = 0; k < count; ++k)
         if (!std::isfinite(elevation[k]) || !std::isfinite(initial_depth[k]) || initial_depth[k] < 0 ||
             !std::isfinite(saturation[k]) || saturation[k] < 0 || saturation[k] > 1) return false;
-    for (int k : source_cells) if (k < 0 || static_cast<std::size_t>(k) >= count) return false;
+    std::vector<bool> seen(count, false);
+    for (int k : source_cells) {
+        if (k < 0 || static_cast<std::size_t>(k) >= count || seen[k]) return false;
+        seen[k] = true;
+    }
     if (params.source_m3_s > 0 && source_cells.empty()) return false;
+    if (!weights.empty() && weights.size() != source_cells.size()) return false;
+    const auto source_distribution = weights.empty() ? std::vector<double>(source_cells.size(), 1.0) : weights;
+    double weight_sum = 0, max_weight = 0;
+    for (double v : source_distribution) {
+        if (!std::isfinite(v) || v < 0) return false;
+        weight_sum += v; max_weight = std::max(max_weight, v);
+    }
+    if (!std::isfinite(weight_sum) || (params.source_m3_s > 0 && weight_sum <= 0)) return false;
     if (!initial_groundwater.empty()) {
         if(initial_groundwater.size()!=count) return false;
         for(double v:initial_groundwater)
             if(!std::isfinite(v) || v<0 || v>params.aquifer_m*params.specific_yield || (!params.groundwater && v!=0)) return false;
     }
     n = size; dx = cell_m; p = params; sources = source_cells;
+    source_weights = source_distribution; source_weight_sum = weight_sum;
+    max_source_fraction = weight_sum > 0 ? max_weight / weight_sum : 0;
     evaporation_rate_m_s=p.evaporation_m_s;
     bed = elevation; depth = initial_depth;
     top.resize(count); root.resize(count);
@@ -86,7 +100,7 @@ std::vector<double> Hydro::withdraw_roots(const std::vector<double> &demand_m) {
 double Hydro::stable_step() const {
     // Local-inertial wave CFL. Source/rain increment also bounds a dry start.
     double hmax = *std::max_element(depth.begin(), depth.end());
-    hmax += p.max_step_s * (p.rain_m_s + (sources.empty() ? 0 : p.source_m3_s / (sources.size()*dx*dx)));
+    hmax += p.max_step_s * (p.rain_m_s + p.source_m3_s * max_source_fraction / (dx*dx));
     return std::min(p.max_step_s, p.cfl * dx / std::sqrt(g * std::max(hmax, dry)));
 }
 bool Hydro::advance(double duration_s, bool rain) {
@@ -131,7 +145,9 @@ void Hydro::water_step(double dt, bool rain) {
     const double area = dx*dx;
     const double rain_h = rain ? p.rain_m_s * dt : 0;
     const double spring = p.source_m3_s * dt;
-    for (int k : sources) depth[k] += spring / (sources.size()*area);
+    if (source_weight_sum > 0)
+        for (std::size_t i = 0; i < sources.size(); ++i)
+            depth[sources[i]] += spring * (source_weights[i] / source_weight_sum) / area;
     input_m3 += spring + rain_h * depth.size() * area;
     const double cap = p.porosity * p.top_m;
     std::fill(outgoing.begin(), outgoing.end(), 0);

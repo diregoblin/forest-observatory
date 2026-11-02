@@ -18,6 +18,11 @@ var sky_values := {}
 var material_revision := -1
 var impostor_style_revision := -1
 var impostor_style_mode := -1
+var debug_controls_enabled := (
+	OS.get_cmdline_user_args().has("--debug-render-modes")
+	or OS.get_cmdline_user_args().has("--baseline-style")
+	or OS.get_cmdline_user_args().has("--painterly-style")
+)
 var foliage_shader: Shader = preload("res://shaders/painterly_foliage.gdshader")
 var pixel_shader: Shader = preload("res://shaders/pixel_foliage.gdshader")
 
@@ -67,7 +72,13 @@ func _styled_shader() -> Shader:
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F8:
+	if (
+		debug_controls_enabled
+		and event is InputEventKey
+		and event.pressed
+		and not event.echo
+		and event.keycode == KEY_F8
+	):
 		cycle_mode()
 
 

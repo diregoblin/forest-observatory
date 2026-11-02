@@ -12,6 +12,7 @@ signal season_requested
 signal save_requested
 signal load_requested
 signal soil_layers_requested
+signal fungi_map_requested
 signal options_toggled(open: bool)
 signal bank_relief_requested(enabled: bool)
 signal grass_lighting_requested(enabled: bool)
@@ -37,8 +38,6 @@ var style_button: Button
 var season_button: Button
 var calendar_label: Label
 var speed_buttons: Dictionary = {}
-var hydro_map := ForestHydrologyMap.new()
-var map_legend: Label
 var fungi_map := ForestFungiMap.new()
 var fungi_label: Label
 var notices: Array[String] = ["Исток питает ручей. Долина просыпается."]
@@ -107,6 +106,7 @@ func configure(settings: ForestSettings, animal_definitions: Array = []) -> void
 	var labels := ["Над кронами", "У ручья", "У преграды", "Грибная поляна"]
 	for definition in animal_definitions:
 		labels.append(definition.get_meta(&"population_label", definition.display_name))
+	labels.append("Тихий ключ")
 	for index in labels.size():
 		view_selector.get_popup().add_item("%d · %s" % [index + 1, labels[index]], index + 1)
 	view_selector.get_popup().id_pressed.connect(func(id: int): view_requested.emit(id))
@@ -114,7 +114,6 @@ func configure(settings: ForestSettings, animal_definitions: Array = []) -> void
 
 	root.add_child(observation_panel)
 	observation_panel.offset_top = 82
-	_scene_note_overlay(root)
 	_build_options(root, settings)
 	root.add_child(soil_layers)
 	soil_layers.configure()
@@ -191,7 +190,10 @@ func _build_options(root: Control, settings: ForestSettings) -> void:
 	var graphics := _options_page("Вид")
 	_label(graphics, "ОТРИСОВКА", 12, Color(.70, .76, .60))
 	style_button = _button(graphics, "Вид · Пиксельный · F8", func(): style_requested.emit())
-	frame_limit_button = _button(graphics, "Графика · 60 FPS", func(): frame_limit_requested.emit())
+	style_button.visible = false  # Internal A/B controls are not a product setting.
+	frame_limit_button = _button(
+		graphics, "Лимит кадров · 60 FPS", func(): frame_limit_requested.emit()
+	)
 	frame_limit_button.tooltip_text = (
 		"Лимит 30 / 60 кадров в секунду. 30 FPS могут снизить нагрузку на видеокарту."
 		+ "\nПри нехватке производительности фактический темп мира может быть ниже выбранного."
@@ -254,9 +256,8 @@ func _build_options(root: Control, settings: ForestSettings) -> void:
 	var data := _options_page("Наблюдения")
 	var maps := HBoxContainer.new()
 	data.add_child(maps)
-	_button(maps, "Вода · M", func(): _show_layer(toggle_map))
-	_button(maps, "Мицелий · G", func(): _show_layer(toggle_fungi_map))
-	_button(maps, "Почва · V", func(): _show_layer(func(): soil_layers_requested.emit()))
+	_button(maps, "Мицелий · G", func(): _show_layer(func(): fungi_map_requested.emit()))
+	_button(maps, "Вода и почва · V", func(): _show_layer(func(): soil_layers_requested.emit()))
 	_label(
 		data,
 		"ЛЕСНОЙ ВОДОСБОР · %d × %d м" % [settings.extent, settings.extent],
@@ -295,40 +296,14 @@ func _build_options(root: Control, settings: ForestSettings) -> void:
 		help,
 		(
 			"Пробел — пауза · R — дождь · B — преграда"
-			+ "\nT — просмотр сезонов · M — вода · G — мицелий · V — почва"
-			+ "\nF5 — сохранить · F9 — загрузить · F8 — стиль"
+			+ "\nT — просмотр сезонов · G — мицелий · V — вода и почва"
+			+ "\nF5 — сохранить · F9 — загрузить"
 			+ "\nF — интерфейс · Esc — опции / вернуться в лес"
 		),
 		16,
 		Color(.85, .89, .74)
 	)
 	options_overlay.hide()
-
-
-func _scene_note_overlay(root: Control) -> void:
-	observation_panel.close_requested.connect(func(): observation_panel.show_record({}))
-	hydro_map.position = Vector2(-296, 180)
-	hydro_map.anchor_left = 1
-	hydro_map.anchor_right = 1
-	hydro_map.size = Vector2(256, 256)
-	hydro_map.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	hydro_map.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hydro_map.visible = false
-	root.add_child(hydro_map)
-	map_legend = _label(
-		root,
-		(
-			"ГРУНТОВАЯ ВОДА · M · север ↑"
-			+ "\nЗапас 0–100%: коричневый → голубой"
-			+ "\nСиний: поверхность · жёлтый: выход воды"
-		),
-		13,
-		Color(.94, .94, .85)
-	)
-	map_legend.position = Vector2(-360, 450)
-	map_legend.anchor_left = 1
-	map_legend.anchor_right = 1
-	map_legend.visible = false
 
 
 func set_options_open(open: bool) -> void:
@@ -467,7 +442,6 @@ func refresh(
 			% [climate.get("weather_title", "Просмотр сезона"), climate.get("wind_m_s", 0.0)]
 		)
 		season_button.text = "К расчёту · T" if preview else "Сезоны · T"
-	hydro_map.refresh(water)
 
 	rain_button.text = "Дождь · ВКЛ" if water.raining else "Дождь · ВЫКЛ"
 	dam_button.text = "Преграда · ЕСТЬ" if barrier_enabled else "Преграда · НЕТ"
@@ -475,15 +449,6 @@ func refresh(
 
 func _duration(seconds: float) -> String:
 	return "%.1f мин" % (seconds / 60.0) if seconds >= 60 else "%.1f с" % seconds
-
-
-func toggle_map() -> void:
-	if soil_layers.visible:
-		soil_layers_requested.emit()
-	hydro_map.visible = not hydro_map.visible
-	map_legend.visible = hydro_map.visible
-	if hydro_map.visible:
-		fungi_map.visible = false
 
 
 func configure_fungi(fungi: ForestFungi) -> void:
@@ -496,8 +461,6 @@ func toggle_fungi_map() -> void:
 		soil_layers_requested.emit()
 	fungi_map.visible = not fungi_map.visible
 	if fungi_map.visible:
-		hydro_map.visible = false
-		map_legend.visible = false
 		fungi_map.refresh()
 
 

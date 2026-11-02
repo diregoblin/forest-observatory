@@ -158,6 +158,7 @@ func _ready() -> void:
 	dam_view.configure(barrier, settings.dam_height)
 	add_child(hud)
 	hud.configure(settings, animals.definitions)
+	hud.style_button.visible = painterly_style.debug_controls_enabled
 	hud.volumetric_button.set_pressed_no_signal(atmosphere.volumetric_enabled)
 	hud.shadow_quality_selector.select(
 		hud.shadow_quality_selector.get_item_index(atmosphere.shadow_filter_quality)
@@ -193,6 +194,7 @@ func _ready() -> void:
 	hud.save_requested.connect(_save_world)
 	hud.load_requested.connect(_load_world)
 	hud.soil_layers_requested.connect(_toggle_soil_layers)
+	hud.fungi_map_requested.connect(_toggle_fungi_map)
 	hud.soil_layers.layer_requested.connect(_select_soil_layer)
 	hud.soil_layers.cover_requested.connect(_apply_soil_layer_visibility)
 	hud.observation_panel.follow_requested.connect(_set_camera_follow)
@@ -536,12 +538,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			hud.visible = not hud.visible
 		KEY_T:
 			_cycle_season()
-		KEY_M:
-			hud.toggle_map()
 		KEY_G:
-			hud.toggle_fungi_map()
+			_toggle_fungi_map()
 		KEY_V:
 			_toggle_soil_layers()
+
+
+func _toggle_fungi_map() -> void:
+	_finish_model_work(true)
+	hud.toggle_fungi_map()
 
 
 func _toggle_soil_layers() -> void:
@@ -552,8 +557,6 @@ func _toggle_soil_layers() -> void:
 	if layers.visible:
 		soil_layer_fog_enabled = atmosphere.world_env.fog_enabled
 		atmosphere.world_env.fog_enabled = false
-		hud.hydro_map.visible = false
-		hud.map_legend.visible = false
 		hud.fungi_map.visible = false
 		for view in [vegetation, water_view, fungi_view, habitat_view, animals_view]:
 			soil_layer_visibility[view] = view.visible
@@ -612,6 +615,10 @@ func _view(index: int) -> void:
 		_refresh_observation()
 	elif index == 4:
 		camera.view_plot(fungi.observation_center())
+	elif index == 5 + animals.definitions.size():
+		observation.selected.clear()
+		_refresh_observation()
+		camera.view_spring()
 	else:
 		camera.view(index)
 
@@ -735,7 +742,7 @@ func _set_camera_follow(enabled: bool) -> void:
 		var selected := observation.selected
 		var id: int = selected.get("id", -1)
 		if selected.get("kind") != &"animal" or id < 0 or not animals.alive[id]:
-			hud.notice("Выбери живое животное мышью или клавишами 5 / 6 / 7")
+			hud.notice("Выбери живое животное мышью или через «Точки наблюдения»")
 		else:
 			var shape := animals_view.display_shape(id)
 			if not shape.is_empty():
@@ -793,6 +800,16 @@ func _world_models() -> Dictionary:
 func _world_configuration() -> Dictionary:
 	return {
 		"seed": settings.seed,
+		"landscape_revision": 2,
+		"spring":
+		[
+			settings.spring_enabled,
+			settings.spring_fraction,
+			settings.spring_mouth_fraction,
+			settings.spring_flow_m3_s,
+			settings.ravine_depth_m,
+			settings.ravine_half_width_m
+		],
 		"extent": settings.extent,
 		"grid": settings.water_resolution,
 		"day_multiplier": settings.day_speed_multiplier,
@@ -977,6 +994,10 @@ func _compatible_world_state(state: Dictionary) -> bool:
 	for key in _world_models():
 		if not models.get(key) is Dictionary:
 			return false
+	var reference: Dictionary = water.native.snapshot()
+	for field in ["bed", "sources", "source_weights", "options"]:
+		if models.water.get(field) != reference[field]:
+			return false
 	var selection: Dictionary = state.scene.selection
 	if not selection.is_empty():
 		if (
@@ -1082,7 +1103,7 @@ func _ecosystem_budget() -> PackedFloat64Array:
 func _toggle_frame_limit() -> void:
 	# Presentation only: never alter model steps, requested speed or saved worlds.
 	Engine.max_fps = 30 if Engine.max_fps == 60 else 60
-	hud.frame_limit_button.text = "Графика · %d FPS" % Engine.max_fps
+	hud.frame_limit_button.text = "Лимит кадров · %d FPS" % Engine.max_fps
 
 
 func _set_speed(value: float) -> void:
@@ -1161,7 +1182,8 @@ func _capture_sequence() -> void:
 		capture_step = 6
 	elif total_wall > 33 and capture_step == 6:
 		_cycle_season()
-		hud.toggle_map()
+		_toggle_soil_layers()
+		_select_soil_layer(ForestSoilLayers.SURFACE_WATER)
 		_refresh_hud()
 		await _save_frame("07-autumn-water.png")
 		capture_step = 7
@@ -1369,10 +1391,10 @@ func _check_controls() -> void:
 	load("res://tools/check_camera_follow.gd").run(self)
 	var before_frame_limit := _world_snapshot()
 	hud.frame_limit_button.pressed.emit()
-	assert(Engine.max_fps == 30 and hud.frame_limit_button.text == "Графика · 30 FPS")
+	assert(Engine.max_fps == 30 and hud.frame_limit_button.text == "Лимит кадров · 30 FPS")
 	assert(_world_snapshot() == before_frame_limit, "Frame cap must not change the world")
 	hud.frame_limit_button.pressed.emit()
-	assert(Engine.max_fps == 60 and hud.frame_limit_button.text == "Графика · 60 FPS")
+	assert(Engine.max_fps == 60 and hud.frame_limit_button.text == "Лимит кадров · 60 FPS")
 	hud.rain_button.pressed.emit()
 	assert(water.raining)
 	hud.rain_button.pressed.emit()
@@ -1453,10 +1475,10 @@ func _check_controls() -> void:
 		),
 		"season preview does not age trees or alter water"
 	)
-	hud.toggle_map()
-	assert(hud.hydro_map.visible)
-	hud.toggle_map()
-	assert(not hud.hydro_map.visible)
+	_toggle_soil_layers()
+	assert(hud.soil_layers.visible)
+	_toggle_soil_layers()
+	assert(not hud.soil_layers.visible)
 	hud.toggle_fungi_map()
 	assert(hud.fungi_map.visible)
 	hud.toggle_fungi_map()

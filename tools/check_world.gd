@@ -20,6 +20,15 @@ static func run(world) -> void:
 		errors.append(world._ecosystem_budget()[e] - budget[e])
 		assert(absf(errors[e]) < 1e-5, "whole-world finite CNP budget")
 	var before: Dictionary = world._world_snapshot()
+	var old_landscape: Dictionary = before.duplicate(true)
+	old_landscape.configuration.erase("landscape_revision")
+	assert(not world._restore_world(old_landscape) and world._world_snapshot() == before)
+	var changed_source: Dictionary = before.duplicate(true)
+	changed_source.models.water.source_weights[0] += 1
+	assert(not world._restore_world(changed_source) and world._world_snapshot() == before)
+	changed_source = before.duplicate(true)
+	changed_source.models.water.options.source_m3_s += 1
+	assert(not world._restore_world(changed_source) and world._world_snapshot() == before)
 	var corrupt: Dictionary = before.duplicate(true)
 	corrupt.models.animals.version = -1
 	assert(not world._restore_world(corrupt))
@@ -91,6 +100,8 @@ static func run(world) -> void:
 		"atomic_late_rejection": true,
 		"personal_record_rejection_atomic": true,
 		"older_behavior_version_rejected": true,
+		"old_landscape_rejected_atomically": true,
+		"changed_sources_rejected_atomically": true,
 		"invalid_scene_rejected": true,
 		"invalid_selection_rejected": true,
 		"inconsistent_clocks_rejected": true,

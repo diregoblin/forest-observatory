@@ -73,7 +73,9 @@ public:
         std::vector<int> source_cells;
         for (int i=0;i<sources.size();++i) source_cells.push_back(sources[i]);
         forest::Hydro candidate;
-        if (!candidate.initialize(size,cell_m,parameters(opts),unpack(bed),unpack(depth),unpack(saturation),source_cells,unpack(groundwater))) return false;
+        if (opts.has("source_weights") && opts["source_weights"].get_type()!=Variant::PACKED_FLOAT64_ARRAY) return false;
+        const PackedFloat64Array weights=opts.get("source_weights",PackedFloat64Array());
+        if (!candidate.initialize(size,cell_m,parameters(opts),unpack(bed),unpack(depth),unpack(saturation),source_cells,unpack(groundwater),unpack(weights))) return false;
         core = std::move(candidate); return true;
     }
     bool advance(double seconds,bool rain) { return core.advance(seconds,rain); }
@@ -126,19 +128,20 @@ public:
         return d;
     }
     Dictionary snapshot() const {
-        Dictionary d=metrics(); d["version"]=2; d["n"]=core.n; d["dx"]=core.dx;
+        Dictionary d=metrics(); d["version"]=3; d["n"]=core.n; d["dx"]=core.dx;
         d["options"]=options(core.p);
 #define FIELD(name) d[#name]=pack(core.name)
         FIELD(bed); FIELD(depth); FIELD(top); FIELD(root); FIELD(pending);
         FIELD(evaporation_demand); FIELD(qx); FIELD(qz); FIELD(crest_x); FIELD(crest_z);
         FIELD(ground); FIELD(seepage_m_s);
+        FIELD(source_weights);
 #undef FIELD
         PackedInt32Array cells; for(int k:core.sources) cells.append(k);
         d["sources"]=cells; return d;
     }
     bool restore(const Dictionary &d) {
         const int version=d.get("version",0);
-        if ((version!=1 && version!=2) || !d.has("options") || !d.has("sources")) return false;
+        if ((version<1 || version>3) || !d.has("options") || !d.has("sources")) return false;
         forest::Hydro candidate;
         const int n=d.get("n",0); const double dx=d.get("dx",0.0);
         if (n<2 || n>4096) return false;
@@ -150,12 +153,18 @@ public:
         PackedFloat64Array bed=d["bed"],depth=d["depth"];
         PackedInt32Array sources=d["sources"]; std::vector<int> cells;
         for(int k:sources) cells.push_back(k);
-        if (!candidate.initialize(n,dx,parameters(d["options"]),unpack(bed),unpack(depth),std::vector<double>(n*n,0),cells)) return false;
+        PackedFloat64Array weights;
+        if (version==3) {
+            if (!d.has("source_weights") || d["source_weights"].get_type()!=Variant::PACKED_FLOAT64_ARRAY) return false;
+            weights=d["source_weights"];
+            if (weights.size()!=sources.size()) return false;
+        }
+        if (!candidate.initialize(n,dx,parameters(d["options"]),unpack(bed),unpack(depth),std::vector<double>(n*n,0),cells,{},unpack(weights))) return false;
 #define LOAD(name) candidate.name=unpack(PackedFloat64Array(d[#name]))
         LOAD(top); LOAD(root); LOAD(pending); LOAD(evaporation_demand);
         LOAD(qx); LOAD(qz); LOAD(crest_x); LOAD(crest_z);
 #undef LOAD
-        if(version==2) {
+        if(version>=2) {
             for(auto name:{"ground","seepage_m_s"}) {
                 if(!d.has(name) || d[name].get_type()!=Variant::PACKED_FLOAT64_ARRAY) return false;
                 PackedFloat64Array v=d[name]; if(v.size()!=n*n) return false;
@@ -170,7 +179,7 @@ public:
         SCALAR(time_s); SCALAR(soil_elapsed_s); SCALAR(initial_m3); SCALAR(input_m3);
         SCALAR(outlet_m3); SCALAR(evaporated_m3); SCALAR(deep_drain_m3); SCALAR(infiltrated_m3);
         SCALAR(water_steps); SCALAR(soil_ticks); SCALAR(limited_faces); SCALAR(froude_limited_faces);
-        if(version==2) { SCALAR(recharged_m3); SCALAR(seeped_m3); SCALAR(transpired_m3); SCALAR(evaporation_rate_m_s); }
+        if(version>=2) { SCALAR(recharged_m3); SCALAR(seeped_m3); SCALAR(transpired_m3); SCALAR(evaporation_rate_m_s); }
 #undef SCALAR
         const double scalars[]={candidate.time_s,candidate.soil_elapsed_s,candidate.initial_m3,candidate.input_m3,
             candidate.outlet_m3,candidate.evaporated_m3,candidate.deep_drain_m3,candidate.infiltrated_m3,
