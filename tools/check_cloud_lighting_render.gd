@@ -82,6 +82,7 @@ func _run() -> void:
 	]:
 		view.visible = false
 	var env = scene.atmosphere.world_env
+	scene.atmosphere.set_volumetric_enabled(false)
 	env.ambient_light_energy = 0
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color.BLACK

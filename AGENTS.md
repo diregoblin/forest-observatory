@@ -169,3 +169,6 @@ Do not format or patch the third-party addon as part of an application change.
   Measure the cloud field viewport separately from world/composition GPU times.
   Volumetrics are a switchable coarse native Forward+ effect, on by default;
   suppress them for soil diagnostics without losing the user's preference.
+  Sky alpha fringes do not imply native alpha-blended shadows: alpha hash was
+  rejected for visible pepper. Keep the finite-disc low-sun taper and opaque
+  control; fade sky decks before the grazing-angle projection clamp.

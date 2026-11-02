@@ -20,6 +20,7 @@ uniform sampler2D cloud_field_map : filter_linear, repeat_disable;
 uniform float cloud_span = 2048.0;
 
 #include "res://shaders/cloud_field.gdshaderinc"
+#include "res://shaders/cloud_opacity.gdshaderinc"
 void sky() {
 	float elevation = max(EYEDIR.y, 0.0);
 	vec3 blue = mix(horizon.rgb, zenith.rgb * vec3(.76, 1.04, 1.25),
@@ -30,6 +31,9 @@ void sky() {
 	// on every cubemap face.
 	COLOR = blue;
 	if (!AT_CUBEMAP_PASS) {
+		// Fade both decks out before the low-sheet ray hits its .08 grazing
+		// clamp. Otherwise repeated samples stretch into a wall at the horizon.
+		float horizon_fade = smoothstep(.08, .22, EYEDIR.y);
 		// A higher horizontal deck, behind the low sheet: smaller angular detail,
 		// stretched wisps, thinner opacity and a different advection rate.
 		vec2 high_sheet = EYEDIR.xz / max(EYEDIR.y + .22, .10) * 6.5;
@@ -40,7 +44,7 @@ void sky() {
 		float high_edge = smoothstep(high_threshold - .03, high_threshold + .09, high_field);
 		vec3 high_color = mix(vec3(.14, .17, .25), vec3(.93, .96, 1.0) * sun_tint.rgb, daylight);
 		COLOR = mix(blue, high_color, high_edge * upper_cloud_opacity
-			* smoothstep(.03, .25, EYEDIR.y));
+			* horizon_fade);
 		// Keep the approved flat layer's foreshortening towards the horizon.
 		vec2 sheet = EYEDIR.xz / max(EYEDIR.y + .22, .10) * 2.4;
 		if (world_clouds) {
@@ -57,18 +61,18 @@ void sky() {
 			if (world_clouds) { field = mix(field,texture(cloud_field_map,deck_uv).r,border); }
 		}
 		float threshold = mix(.69, .37, cloud_cover);
-		float edge = smoothstep(threshold - .02, threshold + .05, field);
-		// Broad, screen-stable painted core; the cloud silhouette is shared
-		// exactly with the native caster, not independently regenerated noise.
+		float edge = cloud_opacity(field, cloud_cover);
+		// Broad, screen-stable painted core; coverage is shared with the native
+		// caster instead of independently regenerated noise.
 		float shade_field = field;
 		if (!world_clouds) { shade_field = cloud_field(p + sun_direction * .22); }
 		// Broad painted masses, but no hard interior cutouts or bright sticker rim.
 		float tones = smoothstep(threshold + .015, threshold + .19, shade_field);
 		vec3 shadow = mix(vec3(.10, .13, .22), vec3(.42, .51, .66), daylight);
 		vec3 lit = mix(vec3(.21, .24, .34), vec3(1, .98, .88) * sun_tint.rgb, daylight);
-		vec3 clouds = mix(lit, shadow, tones * .70);
+		// Thin fringes reveal the sky, not a saturated bright sticker outline.
+		vec3 clouds = mix(lit, shadow, .24 + tones * .46);
 		clouds *= mix(1.0, .70, smoothstep(.50, .95, cloud_cover));
-		float horizon_fade = smoothstep(.015, .18, EYEDIR.y);
 		COLOR = mix(COLOR, clouds, edge * horizon_fade * lower_cloud_opacity);
 		COLOR += sun_tint.rgb * smoothstep(.9991, .9995, sun_dot) * daylight * .7;
 		COLOR = mix(horizon.rgb * .64, COLOR, smoothstep(-.10, .03, EYEDIR.y));

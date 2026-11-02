@@ -197,6 +197,13 @@ func _sync_cloud_shadows() -> void:
 		return
 	var direction := sun.global_basis.z.normalized()
 	cloud_deck.submit(displayed_weather, direction)
+	# Stylized finite-disc filtering gives the elevated deck a broad penumbra;
+	# near-ground casters stay tighter. Keep it with the cloud-shadow option.
+	# Grazing rays have a much longer projected footprint; taper the artistic
+	# disc before our finite caster/filter bounds start leaking direct light.
+	sun.light_angular_distance = (
+		1.5 * smoothstep(.18, .60, direction.y) if cloud_deck.visible else 0.0
+	)
 	# Include the elevated deck in the directional caster volume. The default
 	# 20 m pancake clips it out of the near cascades even if far shadows work.
 	sun.directional_shadow_pancake_size = (
