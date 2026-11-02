@@ -19,9 +19,14 @@ var displayed_hour := -1.0
 var cloud_deck
 var volumetric_enabled := true
 var diagnostic_enabled := false
+var shadow_filter_quality: int = ProjectSettings.get_setting(
+	"rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality",
+	RenderingServer.SHADOW_QUALITY_SOFT_ULTRA
+)
 
 
 func configure(world_extent_m := 0.0) -> void:
+	set_shadow_filter_quality(shadow_filter_quality)
 	environment = world_env
 	world_env.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
@@ -76,6 +81,13 @@ func configure(world_extent_m := 0.0) -> void:
 		cloud_deck = preload("res://scripts/cloud_deck.gd").new()
 		add_child(cloud_deck)
 		cloud_deck.configure(world_extent_m)
+
+
+func set_shadow_filter_quality(quality: int) -> void:
+	shadow_filter_quality = clampi(
+		quality, RenderingServer.SHADOW_QUALITY_SOFT_LOW, RenderingServer.SHADOW_QUALITY_SOFT_ULTRA
+	)
+	RenderingServer.directional_soft_shadow_filter_set_quality(shadow_filter_quality)
 
 
 func set_rain(raining: bool) -> void:

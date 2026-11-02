@@ -159,6 +159,9 @@ func _ready() -> void:
 	add_child(hud)
 	hud.configure(settings, animals.definitions)
 	hud.volumetric_button.set_pressed_no_signal(atmosphere.volumetric_enabled)
+	hud.shadow_quality_selector.select(
+		hud.shadow_quality_selector.get_item_index(atmosphere.shadow_filter_quality)
+	)
 	hud.configure_fungi(fungi)
 	hud.options_toggled.connect(
 		func(open: bool):
@@ -183,6 +186,7 @@ func _ready() -> void:
 	)
 	hud.cloud_shadows_requested.connect(atmosphere.set_cloud_shadows_enabled)
 	hud.volumetric_requested.connect(atmosphere.set_volumetric_enabled)
+	hud.shadow_quality_requested.connect(atmosphere.set_shadow_filter_quality)
 	hud.speed_requested.connect(_set_speed)
 	hud.view_requested.connect(_view)
 	hud.season_requested.connect(_cycle_season)

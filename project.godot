@@ -30,6 +30,7 @@ window/vsync/vsync_mode=0
 
 [rendering]
 
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=5
 environment/volumetric_fog/volume_size=64
 environment/volumetric_fog/volume_depth=32
 environment/defaults/default_clear_color=Color(0.32, 0.44, 0.48, 1)

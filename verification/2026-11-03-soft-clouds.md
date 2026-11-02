@@ -50,6 +50,11 @@ that failed run is not a pass receipt. The low-elevation taper restored a black
 solid control without relaxing the oracle. Some sampling grain remains possible
 within the native finite-disc penumbra, not across the full translucent fringe.
 
+Follow-up: Pavel observed that grain at ground level. Directional filtering
+was subsequently increased and made user-adjustable; see
+[shadow-filter verification](2026-11-03-shadow-filter.md). The original receipts
+above describe the earlier default-quality setting, not this later change.
+
 Scoped pre-task shader copies: `/run/media/pavel/Storage/tmp/forest-soft-clouds-20261103/shaders/`.
 The comparison helper uses those explicit reference paths; it does not read or
 rewrite user saves. Existing user window was not restarted.

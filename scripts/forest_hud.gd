@@ -17,6 +17,7 @@ signal bank_relief_requested(enabled: bool)
 signal grass_lighting_requested(enabled: bool)
 signal cloud_shadows_requested(enabled: bool)
 signal volumetric_requested(enabled: bool)
+signal shadow_quality_requested(quality: int)
 
 var info: Label
 var journal: Label
@@ -31,6 +32,7 @@ var bank_relief_button: CheckButton
 var grass_lighting_button: CheckButton
 var cloud_shadows_button: CheckButton
 var volumetric_button: CheckButton
+var shadow_quality_selector: OptionButton
 var style_button: Button
 var season_button: Button
 var calendar_label: Label
@@ -211,6 +213,23 @@ func _build_options(root: Control, settings: ForestSettings) -> void:
 	cloud_shadows_button.tooltip_text = "Движущиеся тени низких облаков на всём лесу. Добавляет нагрузку на GPU."
 	cloud_shadows_button.toggled.connect(func(value: bool): cloud_shadows_requested.emit(value))
 	graphics.add_child(cloud_shadows_button)
+	var shadow_row := HBoxContainer.new()
+	graphics.add_child(shadow_row)
+	var shadow_label := _label(shadow_row, "Качество теней", 16, Color(.86, .89, .79))
+	shadow_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	shadow_quality_selector = OptionButton.new()
+	for quality in [
+		["Низкое", RenderingServer.SHADOW_QUALITY_SOFT_LOW],
+		["Среднее", RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM],
+		["Высокое", RenderingServer.SHADOW_QUALITY_SOFT_HIGH],
+		["Максимальное", RenderingServer.SHADOW_QUALITY_SOFT_ULTRA]
+	]:
+		shadow_quality_selector.add_item(quality[0], quality[1])
+	shadow_quality_selector.tooltip_text = "Качество мягких солнечных теней от облаков и деревьев. Выше — меньше зернистость, больше нагрузка на видеокарту."
+	shadow_quality_selector.item_selected.connect(
+		func(index: int): shadow_quality_requested.emit(shadow_quality_selector.get_item_id(index))
+	)
+	shadow_row.add_child(shadow_quality_selector)
 	volumetric_button = CheckButton.new()
 	volumetric_button.text = "Объёмный свет"
 	volumetric_button.tooltip_text = "Солнечные лучи и объёмная дымка. Эффект заметнее среди деревьев навстречу солнцу; добавляет нагрузку на GPU."
