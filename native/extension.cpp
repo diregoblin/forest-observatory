@@ -58,6 +58,7 @@ protected:
         ClassDB::bind_method(D_METHOD("restore","state"),&ForestHydroNative::restore);
         ClassDB::bind_method(D_METHOD("withdraw_roots","demand_m"),&ForestHydroNative::withdraw_roots);
         ClassDB::bind_method(D_METHOD("set_evaporation","rate_m_s"),&ForestHydroNative::set_evaporation);
+        ClassDB::bind_method(D_METHOD("advance_forced","seconds","liquid_m_s"),&ForestHydroNative::advance_forced);
         ClassDB::bind_static_method("ForestHydroNative",D_METHOD("float32_field","values"),&ForestHydroNative::float32_field);
     }
 public:
@@ -76,6 +77,14 @@ public:
         core = std::move(candidate); return true;
     }
     bool advance(double seconds,bool rain) { return core.advance(seconds,rain); }
+    bool advance_forced(double seconds,double liquid_m_s) {
+        if (!std::isfinite(liquid_m_s) || liquid_m_s<0) return false;
+        const double original=core.p.rain_m_s;
+        core.p.rain_m_s=liquid_m_s;
+        const bool ok=core.advance(seconds,true);
+        core.p.rain_m_s=original;
+        return ok;
+    }
     PackedFloat64Array withdraw_roots(const PackedFloat64Array &demand) { return pack(core.withdraw_roots(unpack(demand))); }
     bool set_evaporation(double rate) {
         if(!std::isfinite(rate) || rate<0) return false;
@@ -174,11 +183,13 @@ public:
 };
 #include "soil_extension.hpp"
 #include "fungi_extension.hpp"
+#include "plant_light_extension.hpp"
 void initialize_forest_hydro(ModuleInitializationLevel level) {
     if(level==MODULE_INITIALIZATION_LEVEL_SCENE) {
         GDREGISTER_CLASS(ForestHydroNative);
         GDREGISTER_CLASS(ForestSoilNative);
         GDREGISTER_CLASS(ForestFungiNative);
+        GDREGISTER_CLASS(ForestPlantLightNative);
     }
 }
 void terminate_forest_hydro(ModuleInitializationLevel) {}

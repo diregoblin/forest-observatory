@@ -1,0 +1,112 @@
+[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=10 format=3]
+[ext_resource type="Script" path="res://scripts/plant_definition.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/plant_module.gd" id="2"]
+[ext_resource type="Texture2D" path="res://art/canopy/palmate.png" id="canopy"]
+[sub_resource type="CylinderMesh" id="StemMesh"]
+top_radius = 0.025
+bottom_radius = 0.07
+height = 1.56
+radial_segments = 6
+
+[sub_resource type="Resource" id="Stems"]
+script = ExtResource("2")
+mesh = SubResource("StemMesh")
+count = 5
+offset = Vector3(0, 0.78, 0)
+radial_offset = 0.16
+turn = 2.4
+color = Color(0.36,0.29,0.19, 1)
+
+[sub_resource type="SphereMesh" id="LeafMesh"]
+radius = 1.0
+height = 2.0
+radial_segments = 8
+rings = 3
+
+[sub_resource type="Resource" id="Crown"]
+script = ExtResource("2")
+mesh = SubResource("LeafMesh")
+foliage = true
+count = 5
+offset = Vector3(0, 1.4560000000000002, 0)
+step = Vector3(0, 0.156, 0)
+radial_offset = 0.26208
+turn = 2.4
+scale_start = Vector3(0.624, 0.52, 0.5304)
+color = Color(0.29,0.44,0.16, 1)
+
+[sub_resource type="SphereMesh" id="FruitMesh"]
+radius = 0.05
+height = 0.1
+radial_segments = 6
+rings = 3
+
+[sub_resource type="Resource" id="Fruit"]
+script = ExtResource("2")
+component_kind = &"fruit"
+mesh = SubResource("FruitMesh")
+foliage = true
+count = 4
+offset = Vector3(0, 1.56, 0)
+step = Vector3(0, 0.14300000000000002, 0)
+radial_offset = 0.8611199999999999
+radial_step = -0.03432
+turn = 2.4
+cluster_members = 7
+cluster_spread = Vector3(0.15, 0.07, 0.15)
+color = Color(0.76,0.13,0.035, 1)
+[resource]
+script = ExtResource("1")
+species_id = &"guelder_rose"
+display_name = "Калина обыкновенная"
+latin_name = "Viburnum opulus"
+description = "Листопадный кустарник влажных опушек с красными плодами."
+source_url = "https://powo.science.kew.org/results?q=Viburnum%20opulus"
+growth_form = &"shrub"
+life_cycle = &"perennial"
+initial_age_years = Vector2(1,8)
+biomass_kg_c = 2.5
+cn_ratio = 28
+cp_ratio = 330
+dead_decay_per_year = 0.8
+edible_fraction = 0.0
+mature_age_years = 2
+seed_cost_kg_c = 3e-05
+reproduction_per_year = 0.4
+dispersal_m = 3.0
+germination_fraction = 0.18
+recruitment_light = 0.1
+weight = 0.07
+wind_strength = 0.012
+deciduous = true
+leaf_on_day = 110.0
+leaf_off_day = 255.0
+leaf_transition_days = 20.0
+autumn_color = Color(0.75,0.57,0.20,1)
+reference_height_m = 2.6
+max_height_m = 4.680000000000001
+crown_radius_m = 0.78
+height_growth_m_year = 0.09100000000000001
+transpiration_m_s = 5e-09
+minimum_light = 0.1
+flood_depth_m = 0.5
+stress_days = 18.0
+recovery_days = 8.0
+lifespan_years = 40.0
+leaf_mass_fraction = 0.25
+mycorrhiza_type = &"arbuscular"
+modules = Array[ExtResource("2")]([SubResource("Stems"), SubResource("Crown"), SubResource("Fruit")])
+
+fruit_bearing = true
+insect_pollinated = true
+flower_start_day = 155.0
+fruit_start_day = 240.0
+
+initial_habitat_weights = Vector4(0.7, 0.2, 0.5, 0.001)
+
+canopy_texture = ExtResource("canopy")
+canopy_layers = 4
+canopy_leaf_span_m = 0.14
+canopy_color = Color(0.4,0.5,0.38,1)
+branch_radius_m = 0.03
+branch_droop = 0.1

@@ -14,6 +14,27 @@ bool Soil::initialize(int size,double cell_m,Elements org,Elements minerals,Elem
     for(auto &c:cells) {c.area=dx*dx;c.organic=org*c.area;c.mineral=minerals*c.area;c.labile=labile_density*c.area;}
     initial=total();return true;
 }
+// Initial redistribution only; means are normalized so the original element
+// inventory is preserved. Fresh litter is a tagged subset, not extra carbon.
+bool Soil::initialize_pattern(const std::vector<double> &ow,const std::vector<double> &mw,const std::vector<double> &sf) {
+    if(time_s!=0 || !patches.empty() || input.c+input.n+input.p+output.c+output.n+output.p!=0 ||
+       ow.size()!=cells.size() || mw.size()!=cells.size() || sf.size()!=cells.size()) return false;
+    double os=0,ms=0;
+    for(std::size_t k=0;k<ow.size();++k) {
+        if(!std::isfinite(ow[k])||ow[k]<=0||!std::isfinite(mw[k])||mw[k]<=0||!std::isfinite(sf[k])||sf[k]<0||sf[k]>1)return false;
+        os+=ow[k];ms+=mw[k];
+    }
+    if(!std::isfinite(os)||!std::isfinite(ms))return false;
+    const auto total_before=total();
+    Elements organic,labile,mineral;
+    for(const auto &c:cells){organic+=c.organic;labile+=c.labile;mineral+=c.mineral;}
+    for(std::size_t k=0;k<ow.size();++k) {
+        auto &c=cells[k];c.organic=organic*(ow[k]/os);c.labile=labile*(ow[k]/os);
+        c.mineral=mineral*(mw[k]/ms);c.surface_c=c.organic.c*sf[k];
+    }
+    initial=total_before;
+    return finite_state();
+}
 int Soil::add_patch(int size,double step,double ox,double oz) {
     if(size<2||size>1024||!std::isfinite(step)||step<=0||step>dx||!std::isfinite(ox)||!std::isfinite(oz)||ox<0||oz<0||ox+size*step>n*dx+1e-8||oz+size*step>n*dx+1e-8) return -1;
     // Both grids align exactly: every fine cell has one base owner. This is
@@ -27,6 +48,7 @@ int Soil::add_patch(int size,double step,double ox,double oz) {
         if(b.area<f.area-1e-8) return -1;
         const double fraction=f.area/b.area;
         f.organic=b.organic*fraction;f.labile=b.labile*fraction;f.mineral=b.mineral*fraction;
+        f.surface_c=b.surface_c*fraction;b.surface_c-=f.surface_c;
         b.organic=b.organic-f.organic;b.labile=b.labile-f.labile;b.mineral=b.mineral-f.mineral;b.area-=f.area;
         if(b.area<1e-9) {b.area=0;b.organic={};b.labile={};b.mineral={};}
     }
@@ -45,11 +67,13 @@ SoilCell *Soil::at(double x,double z) {
 const SoilCell *Soil::at(double x,double z) const {return const_cast<Soil*>(this)->at(x,z);}
 Elements Soil::deposit(double x,double z,Elements amount,bool organic) {
     auto *c=at(x,z);if(!c||!valid(amount)||(!organic&&amount.c!=0))return {};
-    if(organic)c->organic+=amount;else c->mineral+=amount;input+=amount;return amount;
+    if(organic){c->organic+=amount;c->surface_c+=amount.c;}else c->mineral+=amount;input+=amount;return amount;
 }
 Elements Soil::withdraw(double x,double z,Elements requested,bool organic) {
     auto *c=at(x,z);if(!c||!valid(requested))return {};
-    auto &pool=organic?c->organic:c->mineral;const auto amount=minimum(pool,requested);pool=pool-amount;output+=amount;return amount;
+    auto &pool=organic?c->organic:c->mineral;const auto amount=minimum(pool,requested);
+    if(organic&&pool.c>0)c->surface_c*=std::max(0.0,1-amount.c/pool.c);
+    pool=pool-amount;output+=amount;return amount;
 }
 void Soil::exchange(Elements d) {
     input+={std::max(0.0,d.c),std::max(0.0,d.n),std::max(0.0,d.p)};
@@ -63,6 +87,7 @@ bool Soil::advance(double seconds,const std::vector<double> &moisture,double tem
         const double wet=std::clamp((saturation-.12)/.38,0.0,1.0)*std::clamp((1.05-saturation)/.18,0.0,1.0);
         const double fraction=-std::expm1(-.12*seconds/(365*86400.0)*temp*wet);
         const Elements decomposed=c.organic*fraction;c.organic=c.organic-decomposed;
+        c.surface_c*=1-fraction;
         c.labile+=decomposed*.35;c.mineral+={0,decomposed.n*.65,decomposed.p*.65};
         const double respiration=decomposed.c*.65;respired_kg+=respiration;output.c+=respiration;
     };
@@ -75,7 +100,7 @@ bool Soil::advance(double seconds,const std::vector<double> &moisture,double tem
 }
 Elements Soil::total() const {Elements r;for(const auto &c:cells)r+=c.total();for(const auto &p:patches)for(const auto &c:p.cells)r+=c.total();return r;}
 bool Soil::finite_state() const {
-    auto check=[](const SoilCell &c){return std::isfinite(c.area)&&c.area>=0&&valid(c.organic)&&valid(c.labile)&&valid(c.mineral)&&c.mineral.c==0;};
+    auto check=[](const SoilCell &c){return std::isfinite(c.area)&&c.area>=0&&std::isfinite(c.surface_c)&&c.surface_c>=0&&c.surface_c<=c.organic.c+1e-8&&valid(c.organic)&&valid(c.labile)&&valid(c.mineral)&&c.mineral.c==0;};
     for(const auto &c:cells)if(!check(c))return false;
     for(const auto &p:patches)for(const auto &c:p.cells)if(!check(c))return false;
     return valid(initial)&&valid(input)&&valid(output)&&std::isfinite(time_s)&&time_s>=0&&std::isfinite(respired_kg)&&respired_kg>=0;

@@ -183,20 +183,27 @@ func _check_presentation_clock() -> void:
 	var previous: float = clock.presentation_sample().hour
 	var previous_fixed: float = clock.sample().hour
 	var fixed_stalls := 0
-	# Full day, including midnight: every 25 ms frame advances 0.01 solar hours.
-	for frame in 2400:
+	# A full configured day, including midnight; criterion derives from the clock definition.
+	var frames := roundi(settings.day_water_s() / .025)
+	var hour_per_frame := .025 * settings.day_speed_multiplier / 3600.0
+	for frame in frames:
 		clock.request(.025)
 		_drain_clock(clock)
 		var before := clock.snapshot()
 		var visible := clock.presentation_sample()
 		var delta := fposmod(visible.hour - previous, 24.0)
-		assert(absf(delta - .01) < 1e-9, "no plateaus or tick-boundary jumps, even at midnight")
+		assert(
+			absf(delta - hour_per_frame) < 1e-9,
+			"no plateaus or tick-boundary jumps, even at midnight"
+		)
 		assert(clock.snapshot() == before, "display sampling cannot advance ecology")
 		if clock.sample().hour == previous_fixed:
 			fixed_stalls += 1
 		previous = visible.hour
 		previous_fixed = clock.sample().hour
-	assert(fixed_stalls > 2000, "old fixed-step sampling fails the same smoothness criterion")
+	assert(
+		fixed_stalls > frames * .8, "old fixed-step sampling fails the same smoothness criterion"
+	)
 	var frozen := clock.presentation_sample()
 	var resumed := ForestEcologyClock.new(settings)
 	assert(resumed.restore(clock.snapshot()))
@@ -220,9 +227,9 @@ func _check_split_clocks() -> void:
 	var settings: ForestSettings = CONFIG.duplicate(true)
 	var a := ForestEcologyClock.new(settings)
 	var b := ForestEcologyClock.new(settings)
-	a.request(60.125)
+	a.request(settings.day_water_s() + .125)
 	_drain_clock(a)
-	for i in 481:
+	for i in roundi((settings.day_water_s() + .125) / .125):
 		b.request(.125)
 		_drain_clock(b)
 	assert(a.snapshot() == b.snapshot(), "fixed ecological ticks ignore render partition")
@@ -231,7 +238,7 @@ func _check_split_clocks() -> void:
 	var resumed := ForestEcologyClock.new(settings)
 	assert(resumed.restore(a.snapshot()))
 	for clock in [a, resumed]:
-		clock.request(540)
+		clock.request(settings.year_water_s() - settings.day_water_s())
 		_drain_clock(clock)
 	assert(a.snapshot() == resumed.snapshot() and a.sample() == resumed.sample())
 	assert(a.sample().year == 2 and absf(a.sample().day - settings.start_day) < 1e-8)

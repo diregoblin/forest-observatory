@@ -1,0 +1,51 @@
+[gd_resource type="Resource" script_class="ForestAnimalDefinition" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/animal_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+metadata/population_label = "Полёвки"
+species_id = &"myodes_glareolus"
+display_name = "Рыжая полёвка"
+latin_name = "Myodes glareolus"
+description = "Мелкий лесной грызун с округлыми ушами, рыжей спиной и коротким хвостом. Здесь ест местные растения, прячется и служит мелкой добычей лисы. Всеядность, семенной рацион теперь связаны с устойчивым местным убежищем; детали подземных ходов не моделируются; размеры и обмен сценарные."
+source_url = "https://animaldiversity.org/accounts/Myodes_glareolus/"
+initial_count = 48
+sleep_start_hour = 1.0
+sleep_period_h = 6.0
+sleep_duration_h = 2.0
+founder_pair_spacing_m = 10.0
+initial_age_years = 0.3
+initial_elements = Vector3(0.008, 0.0008, 0.00008)
+minimum_body_carbon_kg = 0.003
+maximum_body_carbon_kg = 0.012
+basal_carbon_kg_day = 0.0006
+movement_carbon_kg_m = 0.0000007
+intake_carbon_kg_day = 0.003
+minimum_edible_carbon_kg = 0.000002
+movement_m_biological_s = 0.00010
+sense_radius_m = 7.0
+bite_reach_m = 0.6
+excursion_distance_m = 1.8
+cover_minimum_height_m = 0.3
+selection_radius_m = 0.13
+selection_height_m = 0.18
+lifespan_years = 2.0
+reproduction_enabled = true
+maturity_days = 60.0
+gestation_days = 21.0
+reproduction_cooldown_days = 30.0
+litter_size = 4
+newborn_fraction = 0.08
+breeding_start_day = 110.0
+breeding_end_day = 270.0
+
+home_range_m = 18.0
+shelter_kind = "нора"
+part_shapes = PackedStringArray("barrel", "barrel", "ellipsoid", "taper", "ellipsoid", "ellipsoid", "ellipsoid", "taper", "ellipsoid", "taper", "ellipsoid", "ellipsoid", "ellipsoid", "taper", "ellipsoid", "taper", "ellipsoid", "ellipsoid", "ellipsoid", "ellipsoid", "ellipsoid", "ellipsoid", "ellipsoid", "plume")
+part_dimensions = Array[Vector3]([Vector3(0.105, 0.1, 0.17), Vector3(0.083, 0.045, 0.14), Vector3(0.074, 0.068, 0.081), Vector3(0.047, 0.037, 0.059), Vector3(0.035, 0.041, 0.018), Vector3(0.023, 0.028, 0.007), Vector3(0.02, 0.036, 0.024), Vector3(0.022, 0.012, 0.039), Vector3(0.02, 0.036, 0.024), Vector3(0.022, 0.012, 0.039), Vector3(0.035, 0.041, 0.018), Vector3(0.023, 0.028, 0.007), Vector3(0.02, 0.036, 0.024), Vector3(0.022, 0.012, 0.039), Vector3(0.02, 0.036, 0.024), Vector3(0.022, 0.012, 0.039), Vector3(0.00516, 0.01344, 0.01176), Vector3(0.00372, 0.0096, 0.00852), Vector3(0.00144, 0.00216, 0.00216), Vector3(0.00516, 0.01344, 0.01176), Vector3(0.00372, 0.0096, 0.00852), Vector3(0.00144, 0.00216, 0.00216), Vector3(0.018, 0.013, 0.014), Vector3(0.012, 0.013, 0.1)])
+part_offsets = Array[Vector3]([Vector3(0, 0.064, -0.014), Vector3(0, 0.037, -0.006), Vector3(0, 0.076, 0.083), Vector3(0, 0.058, 0.124), Vector3(-0.031, 0.109, 0.066), Vector3(-0.031, 0.109, 0.076), Vector3(-0.042, 0.027, -0.048), Vector3(-0.044, 0.009, -0.034), Vector3(-0.042, 0.027, 0.048), Vector3(-0.044, 0.009, 0.062), Vector3(0.031, 0.109, 0.066), Vector3(0.031, 0.109, 0.076), Vector3(0.042, 0.027, -0.048), Vector3(0.044, 0.009, -0.034), Vector3(0.042, 0.027, 0.048), Vector3(0.044, 0.009, 0.062), Vector3(-0.0245, 0.086, 0.112), Vector3(-0.02642, 0.086, 0.1126), Vector3(-0.02834, 0.08828, 0.11392), Vector3(0.0245, 0.086, 0.112), Vector3(0.02642, 0.086, 0.1126), Vector3(0.02834, 0.08828, 0.11392), Vector3(0, 0.059, 0.156), Vector3(0, 0.026, -0.13)])
+part_rotations = Array[Vector3]([Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(-8, 0, 0)])
+part_colors = Array[Color]([Color(0.600000, 0.396078, 0.266667, 1), Color(0.737255, 0.701961, 0.603922, 1), Color(0.709804, 0.513725, 0.337255, 1), Color(0.752941, 0.647059, 0.501961, 1), Color(0.529412, 0.400000, 0.298039, 1), Color(0.749020, 0.623529, 0.509804, 1), Color(0.647059, 0.505882, 0.356863, 1), Color(0.752941, 0.631373, 0.509804, 1), Color(0.647059, 0.505882, 0.356863, 1), Color(0.752941, 0.631373, 0.509804, 1), Color(0.529412, 0.400000, 0.298039, 1), Color(0.749020, 0.623529, 0.509804, 1), Color(0.647059, 0.505882, 0.356863, 1), Color(0.752941, 0.631373, 0.509804, 1), Color(0.647059, 0.505882, 0.356863, 1), Color(0.752941, 0.631373, 0.509804, 1), Color(0.670588, 0.576471, 0.439216, 1), Color(0.094118, 0.117647, 0.098039, 1), Color(0.925490, 0.898039, 0.807843, 1), Color(0.670588, 0.576471, 0.439216, 1), Color(0.094118, 0.117647, 0.098039, 1), Color(0.925490, 0.898039, 0.807843, 1), Color(0.639216, 0.498039, 0.419608, 1), Color(0.572549, 0.494118, 0.376471, 1)])
+part_roles = PackedStringArray("body", "body", "head", "head", "ear", "ear", "leg", "paw", "leg", "paw", "ear", "ear", "leg", "paw", "leg", "paw", "head", "eye", "eye", "head", "eye", "eye", "nose", "tail")
+part_pivots = Array[Vector3]([Vector3(0, 0.064, -0.014), Vector3(0, 0.037, -0.006), Vector3(0, 0.076, 0.083), Vector3(0, 0.076, 0.083), Vector3(-0.029, 0.091, 0.066), Vector3(-0.029, 0.091, 0.066), Vector3(-0.039, 0.05, -0.048), Vector3(-0.039, 0.05, -0.048), Vector3(-0.039, 0.05, 0.048), Vector3(-0.039, 0.05, 0.048), Vector3(0.029, 0.091, 0.066), Vector3(0.029, 0.091, 0.066), Vector3(0.039, 0.05, -0.048), Vector3(0.039, 0.05, -0.048), Vector3(0.039, 0.05, 0.048), Vector3(0.039, 0.05, 0.048), Vector3(0, 0.076, 0.083), Vector3(0, 0.076, 0.083), Vector3(0, 0.076, 0.083), Vector3(0, 0.076, 0.083), Vector3(0, 0.076, 0.083), Vector3(0, 0.076, 0.083), Vector3(0, 0.076, 0.083), Vector3(0, 0.04, -0.08)])

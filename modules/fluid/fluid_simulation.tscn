@@ -1,0 +1,36 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://modules/fluid/fluid_simulation.gd" id="1_y6dff"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_k7dhe"]
+cull_mode = 1
+shading_mode = 0
+albedo_color = Color(0, 0, 0, 1)
+grow = true
+grow_amount = 0.000875
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pi343"]
+next_pass = SubResource("StandardMaterial3D_k7dhe")
+vertex_color_use_as_albedo = true
+
+[sub_resource type="SphereMesh" id="SphereMesh_g7x6e"]
+material = SubResource("StandardMaterial3D_pi343")
+radius = 0.0125
+height = 0.025
+radial_segments = 12
+rings = 6
+
+[sub_resource type="MultiMesh" id="MultiMesh_m66y8"]
+transform_format = 1
+use_colors = true
+custom_aabb = AABB(0, 0, 0, 32, 16, 16)
+instance_count = 0
+mesh = SubResource("SphereMesh_g7x6e")
+
+[node name="FluidSimulation" type="Node3D" unique_id=1961907792]
+script = ExtResource("1_y6dff")
+
+[node name="MultiMeshInstance3D" type="MultiMeshInstance3D" parent="." unique_id=382930440]
+unique_name_in_owner = true
+multimesh = SubResource("MultiMesh_m66y8")
+

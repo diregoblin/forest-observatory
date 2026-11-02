@@ -1,67 +1,43 @@
-[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=11 format=3]
-
+[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=9 format=3]
 [ext_resource type="Script" path="res://scripts/plant_definition.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/plant_module.gd" id="2"]
-
-[sub_resource type="CylinderMesh" id="StemMesh"]
-top_radius = 0.012
-bottom_radius = 0.03
-height = 0.5
-radial_segments = 5
-[sub_resource type="CylinderMesh" id="BranchMesh"]
-top_radius = 0.005
-bottom_radius = 0.014
-height = 0.22
-radial_segments = 4
-[sub_resource type="SphereMesh" id="LeafMesh"]
-radius = 1.0
-height = 1.4
-radial_segments = 7
-rings = 3
-[sub_resource type="SphereMesh" id="FlowerMesh"]
+[ext_resource type="Texture2D" path="res://art/herbs/serrated.png" id="mask"]
+[sub_resource type="QuadMesh" id="Card"]
+size = Vector2(1, 1)
+[sub_resource type="SphereMesh" id="Unit"]
 radius = 1.0
 height = 2.0
 radial_segments = 6
-rings = 3
-[sub_resource type="Resource" id="Stem"]
+rings = 2
+[sub_resource type="CylinderMesh" id="Axis0"]
+height = 0.64
+bottom_radius = 0.006
+top_radius = 0.0016800000000000003
+radial_segments = 5
+[sub_resource type="Resource" id="M0"]
 script = ExtResource("2")
-mesh = SubResource("StemMesh")
-offset = Vector3(0, 0.25, 0)
-color = Color(0.38, 0.48, 0.22, 1)
-[sub_resource type="Resource" id="Branches"]
+mesh = SubResource("Axis0")
+shape = "shoot"
+color = Color(0.38, 0.43, 0.24, 1)
+leaf_count = 10
+leaf_size = Vector2(0.055, 0.15)
+bend = Vector3(0.012, 0.025, 0.018)
+leaf_color = Color(0.28, 0.44, 0.19, 1)
+[sub_resource type="Resource" id="M1"]
 script = ExtResource("2")
-mesh = SubResource("BranchMesh")
-count = 5
-offset = Vector3(0, 0.2, 0)
-step = Vector3(0, 0.09, 0)
-radial_offset = 0.04
-turn = 2.4
-rotation_degrees = Vector3(0, 0, 55)
-color = Color(0.4, 0.5, 0.24, 1)
-[sub_resource type="Resource" id="Leaves"]
-script = ExtResource("2")
-mesh = SubResource("LeafMesh")
+mesh = SubResource("Unit")
+shape = "spur"
+component_kind = &"flower"
 foliage = true
-count = 12
-offset = Vector3(0, 0.22, 0)
-step = Vector3(0, 0.025, 0)
-radial_offset = 0.13
-turn = 2.4
-scale_start = Vector3(0.09, 0.025, 0.055)
-scale_step = Vector3(0, -0.001, 0)
-color = Color(0.24, 0.44, 0.16, 1)
-[sub_resource type="Resource" id="Flowers"]
-script = ExtResource("2")
-mesh = SubResource("FlowerMesh")
-foliage = true
+color = Color(0.96, 0.69, 0.16, 1)
+scale_start = Vector3(0.038, 0.038, 0.038)
 count = 6
-offset = Vector3(0, 0.38, 0)
-step = Vector3(0, 0.02, 0)
-radial_offset = 0.1
-turn = 2.4
-scale_start = Vector3(0.05, 0.035, 0.05)
-scale_step = Vector3(0, -0.001, 0)
-color = Color(0.85, 0.55, 0.18, 1)
+offset = Vector3(0, 0.28, 0)
+step = Vector3(0, 0.045, 0)
+radial_offset = 0.085
+turn = 2.39996
+rotation_degrees = Vector3(-12, 0, 12)
+petiole_length = 0.08
 [resource]
 script = ExtResource("1")
 species_id = &"balsam"
@@ -100,4 +76,10 @@ flood_depth_m = 0.25
 stress_days = 10.0
 recovery_days = 6.0
 lifespan_years = 1.0
-modules = Array[ExtResource("2")]([SubResource("Stem"), SubResource("Branches"), SubResource("Leaves"), SubResource("Flowers")])
+mycorrhiza_type = &"arbuscular"
+
+insect_pollinated = true
+
+initial_habitat_weights = Vector4(0.1, 0.2, 2.5, 0.001)
+canopy_texture = ExtResource("mask")
+modules = Array[ExtResource("2")]([SubResource("M0"), SubResource("M1")])

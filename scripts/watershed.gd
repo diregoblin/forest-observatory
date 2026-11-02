@@ -178,8 +178,8 @@ func _rebuild_crests() -> void:
 	assert(ok)
 
 
-func step(dt: float, copy_fields := true) -> void:
-	var ok: bool = native.advance(dt, raining)
+func step(dt: float, copy_fields := true, liquid_m_s := -1.0) -> void:
+	var ok: bool = native.advance(dt, raining) if liquid_m_s < 0 else native.advance_forced(dt, liquid_m_s)
 	assert(ok, "Native hydrology advance failed")
 	clock += dt
 	if copy_fields:

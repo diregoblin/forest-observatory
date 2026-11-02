@@ -13,6 +13,7 @@ struct Elements {
 };
 struct SoilCell {
     double area=0;
+    double surface_c=0; // Fresh surface organic C, a subset of organic.c, never added to totals.
     Elements organic,labile,mineral;
     Elements total() const {return organic+labile+mineral;}
 };
@@ -28,6 +29,9 @@ public:
     std::vector<SoilPatch> patches;
     bool initialize(int size,double cell_m,Elements organic_density={2,.1,.008},
                     Elements mineral_density={0,.02,.002},Elements labile_density={.05,.0025,.0002});
+    bool initialize_pattern(const std::vector<double> &organic_weights,
+                            const std::vector<double> &mineral_weights,
+                            const std::vector<double> &surface_fractions);
     // Refinement conservatively transfers covered coarse reserves. No overlap.
     int add_patch(int size,double cell_m,double ox,double oz);
     int find_patch(double x,double z) const;

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ForestFungusDefinition" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/fungus_definition.gd" id="1"]
+[resource]
+script = ExtResource("1")
+species_id = &"boletus_edulis"
+display_name = "Белый гриб"
+latin_name = "Boletus edulis"
+trophic_type = &"ectomycorrhizal"
+source_url = "https://www.first-nature.com/fungi/boletus-edulis.php"
+cap_radius_m = 0.14
+stem_radius_m = 0.045
+stem_height_m = 0.19
+cap_height_ratio = 0.65
+cap_color = Color(0.40, 0.22, 0.10, 1)
+stem_color = Color(0.84, 0.77, 0.62, 1)
+representative_body_kg = 0.00010
+fruit_lifetime_s = 1209600.0

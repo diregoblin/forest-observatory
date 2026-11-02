@@ -14,6 +14,10 @@ engine installations, services, user saves, or other projects for this work.
   solver consumes face-crest fields, not scenario-specific dam conditionals.
 - All ecology advances on fixed **model** time, not render-frame time. Rendering
   interpolation and wind are presentation only. Seeded generation is local.
+- The live scene runs one entire coupled tick on one worker. While it owns the
+  models, the main thread uses only submitted display state. Join before model
+  reads/mutations (including pause, save/load, controls and picking); no competing
+  model writers. The synchronous headless path is the exact reference.
 - Keep world dimensions and field resolution in `ForestSettings`. Views use
   the model's cell size and extent; don't silently duplicate grid constants.
 - No physics in presentation shaders: they display model fields. A dedicated
@@ -28,6 +32,11 @@ engine installations, services, user saves, or other projects for this work.
   reserves into non-overlapping fine patches. Coupled fungal resource/litter
   fields are read-only mirrors and excluded from ecosystem totals; snapshots
   must project the current owner, not stale solver caches.
+- Leaf carbon is a subset of live plant carbon; fresh surface carbon is a subset
+  of soil organic carbon. Neither is added again to ecosystem totals. Leaf fall
+  transfers existing C/N/P locally, including at domain edges. ECM exchange pays
+  actual host carbon for finite local nutrients; AM/ericoid traits are not yet
+  implemented channels. Soil shaders only read snapshots, never invent stocks.
 - Picking uses one observer and the view's last submitted geometry, not future
   model transforms. Whole-world load validates scene/cross-model contracts and
   restores participants transactionally in dependency order.
@@ -44,6 +53,14 @@ engine installations, services, user saves, or other projects for this work.
 
 ## Verification
 
+GPU safety (Pavel, 2026-11-01): launch experiments through `tools/run.sh` or
+`python3 tools/gpu_guard.py -- COMMAND ...`, never the unguarded engine.
+The watchdog refuses a hot/missing GPU and stops its process group at **>=75 C**
+or the first invalid/missing telemetry sample. Pavel explicitly revised the
+previous 70 C ceiling to 75 C; never raise/disable the current ceiling.
+Do not repeat the failed thermal soak; use saved foreground telemetry and a
+CPU/headless geometry audit first. No driver/power/fan changes are authorized.
+
 Run `tools/check.sh` after changing a model/interface. For presentation changes,
 run an actual Forward+ preview and inspect saved images. See README.md.
 `tools/check_contracts.gd` covers adding a third species without code changes,
@@ -52,6 +69,9 @@ partitioning. Keep numerical controls in `tools/check_water.gd` meaningful.
 
 - In scripted `.tres` subresources, assign `script` before script-defined fields.
   Check loaded foliage/wood tags, not only the resource source text.
+  Avoid standalone `#` comments in these resource files: on Redot 26.3 a
+  comment before `canopy_texture` silently left that next property unset.
+  Keep explanations in docs and assert the loaded Texture2D is non-null.
 - Capture screenshots after `RenderingServer.frame_post_draw`; a forced draw can
   still return the previous frame. Verify the date/preview label in seasonal PNGs.
 - Seasonal preview is read-only and paused, never a shortcut for advancing water
@@ -69,3 +89,52 @@ partitioning. Keep numerical controls in `tools/check_water.gd` meaningful.
 
 Formatting/lint: optional `.tools-venv/bin/gdformat` and `gdlint`; gdtoolkit 4.x.
 Do not format or patch the third-party addon as part of an application change.
+
+- Keep rollback copies containing `class_name` scripts outside the Godot project.
+  If an in-project fixture directory is unavoidable, create `.gdignore` before
+  copying scripts: the editor otherwise registers duplicate global classes.
+
+- Test live presentation across actual busy-worker frames and tick completions,
+  not just the synchronous reference. Copy paths/weather only after joining;
+  per-frame drawing, picking bounds and camera follow use committed copies.
+- Plant UV.x encodes component tags only when `tree_enabled` is true. Generic
+  primitives (stones) use ordinary UVs; never run flower/fruit discard on them.
+  UV.y=1..2 marks nested canopy shells/depth; UV2 holds fixed leaf-mask UVs.
+  Legacy primitive modules reset UV2 and UV.y to zero. Keep picking and atlas baking
+  on the same cutout/tag path. Duplicate source Images before generating
+  mipmaps: the headless/Dummy renderer can return a shared source Image and
+  otherwise invalidate subsequent species' visual hashes. `check_canopy` and
+  `check_plant_lod` cover source immutability and all 29 LoDs after a rebuild.
+
+- Grass cards use UV2.x for the crossed-plane index (not the plant canopy
+  convention). Fade departing planes before changing a patch's shared mesh.
+  Patch LoD uses nearest XZ distance conservatively, not its centre: no visible
+  plane may be dropped early. Keep thresholds shared through material params.
+  Alpha multiplied by a distance fade still hits a hard alpha-scissor cutoff;
+  use stable world-seeded staggered tuft lowering instead of temporal dither.
+
+- Botanical modules are generic shapes (`shoot`, `leaf_card`, `star`, `bell`,
+  `spur`, `aggregate`, `panicle`), never species-name branches. UV.y=3 marks
+  fixed folded leaf cards, UV2 their cutout coordinates. Unlike nested crown
+  shells, they retain a .5 alpha threshold: lowering it at coarse shadow-map
+  mips fills the whole rectangle. Picking and atlas baking share that mask.
+  Botanical recipe colours are authored in sRGB and converted once at mesh
+  emission (vertex COLOR is linear); do not brighten them with a second decode.
+  Rebuild colour/normal impostors after geometry, mask or vertex-colour changes.
+
+- Animal shapes are generic closed volumes from resource recipes. `part_pivots`
+  are optional anatomical hinges, in the same coordinates as `part_offsets`:
+  ear lining/tip, shin/paw and tail tip must share their parent hinge. The first
+  `head` part is the skull pivot, not the last muzzle or eye detail. Preserve
+  CUSTOM0 tags through indexed merging; CPU picking and the shader deform the
+  same geometry. Animal recipe colours are sRGB, decoded once at emission.
+  Inherited ear length/angle must transform the whole group about its hinge,
+  not elongate each lining/tip independently; `check_fauna_geometry` tests contact.
+
+- Articulated flight uses resource `wing_shoulder` and roles `flight_wing`,
+  `flight_tip`, `flight_leg`. CUSTOM0 keeps the wrist/leg hinge; a cached per-body
+  shoulder supplies its parent. CPU `deform` and the shader apply wrist, shoulder,
+  body pitch in the same order. Blend `flight`/`wrist` on displayed time only;
+  keep the blended pose for bounds/picking and never read models in `_animate`.
+  Edit `build_animal_motion.py`, regenerate Blender/JSON and the Redot motion
+  library together. `check_bird_flight` covers span, wrist attachment and fades.

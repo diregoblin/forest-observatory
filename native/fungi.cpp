@@ -108,16 +108,16 @@ void Fungi::step_coupled(double dt) {
     const double mortality=-std::expm1(-p.mortality_s*dt),replenishment=-std::expm1(-p.replenishment_s*dt),senescence=-std::expm1(-dt/p.fruit_lifetime_s),fruiting=-std::expm1(-dt*p.fruiting_s);
     for(int k=0;k<n*n;++k){
         auto &c=cells[k];c.labile=labile[k];
-        double uptake=std::min(c.labile.c,dt*p.uptake_m4_kg2_s*c.labile.c*biomass[k]*biomass[k]*activity[k]);
+        double uptake=p.ectomycorrhizal?0:std::min(c.labile.c,dt*p.uptake_m4_kg2_s*c.labile.c*biomass[k]*biomass[k]*activity[k]);
         if(p.yield>0){uptake=std::min(uptake,(c.labile.n+c.mineral.n)*cn_ratio/p.yield);uptake=std::min(uptake,(c.labile.p+c.mineral.p)*cp_ratio/p.yield);}
         c.labile.c-=uptake;const double growth=p.yield*uptake;
         const double need_n=growth/cn_ratio,need_p=growth/cp_ratio,take_n=std::min(need_n,c.labile.n),take_p=std::min(need_p,c.labile.p);
         c.labile.n-=take_n;c.mineral.n=std::max(0.0,c.mineral.n-(need_n-take_n));c.labile.p-=take_p;c.mineral.p=std::max(0.0,c.mineral.p-(need_p-take_p));
         biomass[k]+=growth/area;input_kg+=uptake;const double respiration=uptake-growth;output_kg+=respiration;respired_kg+=respiration;
-        const double dead=biomass[k]*mortality*area;biomass[k]-=dead/area;c.organic+={dead,dead/cn_ratio,dead/cp_ratio};output_kg+=dead;
-        const double refill=std::min(c.organic.c,std::max(0.0,p.resource_capacity_kg_m2*area-c.labile.c)*replenishment);
-        if(c.organic.c>0){const auto moved=c.organic*(refill/c.organic.c);c.organic=c.organic-moved;c.labile+=moved;}
-        const double senesced=fruit[k]*senescence*area;fruit[k]-=senesced/area;c.organic+={senesced,senesced/cn_ratio,senesced/cp_ratio};output_kg+=senesced;
+        const double dead=biomass[k]*mortality*area;biomass[k]-=dead/area;c.organic+={dead,dead/cn_ratio,dead/cp_ratio};c.surface_c+=dead;output_kg+=dead;
+        const double refill=p.ectomycorrhizal?0:std::min(c.organic.c,std::max(0.0,p.resource_capacity_kg_m2*area-c.labile.c)*replenishment);
+        if(c.organic.c>0){const double fraction=refill/c.organic.c;const auto moved=c.organic*fraction;c.surface_c*=1-fraction;c.organic=c.organic-moved;c.labile+=moved;}
+        const double senesced=fruit[k]*senescence*area;fruit[k]-=senesced/area;c.organic+={senesced,senesced/cn_ratio,senesced/cp_ratio};c.surface_c+=senesced;output_kg+=senesced;
         const double produced=std::max(0.0,biomass[k]-p.fruit_threshold_kg_m2)*fruiting*fruit_suitability[k];biomass[k]-=produced;fruit[k]+=produced;
     }
     Elements after;for(const auto &c:cells)after+=c.total();soil->exchange(after-before);sync_soil_fields();
@@ -133,5 +133,33 @@ double Fungi::edge_biomass_kg() const {
     for(int y=0;y<n;++y) for(int x=0;x<n;++x)
         if(x<4 || y<4 || x>=n-4 || y>=n-4) sum+=biomass[y*n+x];
     return sum*dx*dx;
+}
+Elements Fungi::trade(double x,double z,double requested_n,double requested_p,double offered_c,double radius) {
+    Elements result;
+    if(!p.ectomycorrhizal||!coupled||!soil||!std::isfinite(x)||!std::isfinite(z)||
+       !std::isfinite(requested_n)||!std::isfinite(requested_p)||!std::isfinite(offered_c)||
+       !std::isfinite(radius)||requested_n<0||requested_p<0||offered_c<=0||radius<=0)return result;
+    auto &patch=soil->patches[soil_patch];
+    const int cx=int(std::floor((x-patch.ox)/dx)),cz=int(std::floor((z-patch.oz)/dx)),reach=int(std::ceil(radius/dx));
+    for(int iz=std::max(0,cz-reach);iz<=std::min(n-1,cz+reach);++iz)
+      for(int ix=std::max(0,cx-reach);ix<=std::min(n-1,cx+reach);++ix) {
+        const int k=iz*n+ix;const double px=patch.ox+(ix+.5)*dx,pz=patch.oz+(iz+.5)*dx;
+        if((px-x)*(px-x)+(pz-z)*(pz-z)>radius*radius||biomass[k]<1e-8||activity[k]<=0)continue;
+        auto &cell=patch.cells[k];const double remaining=offered_c-result.c;
+        if(remaining<=0)return result;
+        double dn=std::min(std::max(0.0,requested_n-result.n),remaining*.10);
+        double dp=std::min(std::max(0.0,requested_p-result.p),remaining*.01);
+        double carbon=std::max(dn/.10,dp/.01);
+        if(carbon<=0)continue;
+        const double need_n=dn+carbon/cn_ratio,need_p=dp+carbon/cp_ratio;
+        const double fraction=std::min({1.0,need_n>0?cell.mineral.n/need_n:1.0,need_p>0?cell.mineral.p/need_p:1.0});
+        carbon*=fraction;dn*=fraction;dp*=fraction;
+        cell.mineral.n-=dn+carbon/cn_ratio;cell.mineral.p-=dp+carbon/cp_ratio;
+        cell.mineral.n=std::max(0.0,cell.mineral.n);cell.mineral.p=std::max(0.0,cell.mineral.p);
+        biomass[k]+=carbon/(dx*dx);input_kg+=carbon;
+        soil->exchange({0,-dn-carbon/cn_ratio,-dp-carbon/cp_ratio});
+        result+={carbon,dn,dp};
+      }
+    return result;
 }
 }

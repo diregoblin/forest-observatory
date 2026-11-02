@@ -14,6 +14,7 @@ func _run() -> void:
 	world = load("res://main.tscn").instantiate()
 	root.add_child(world)
 	world.set_process(false)
+	world.use_model_worker = false  # Reference path; check_smooth_motion covers the worker.
 	world.capture_step = 8  # Disable the unrelated canned valley capture sequence.
 	# Drive the actual composition root at a reproducible frame cadence; GPU draws
 	# every frame. No shortened day or smaller ecological step can mask the bug.

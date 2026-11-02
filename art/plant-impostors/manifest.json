@@ -1,0 +1,437 @@
+{
+  "alder_buckthorn": {
+    "center_y": 1.39924097061157,
+    "layers": [
+      "alder_buckthorn-stem.png",
+      "alder_buckthorn-leaf.png",
+      "alder_buckthorn-stem-normal.png",
+      "alder_buckthorn-leaf-normal.png"
+    ],
+    "mesh_hash": 3430097929,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      2.00390392541885,
+      4.00780785083771
+    ]
+  },
+  "aspen": {
+    "center_y": 7.54739141464233,
+    "layers": [
+      "aspen-stem.png",
+      "aspen-leaf.png",
+      "aspen-stem-normal.png",
+      "aspen-leaf-normal.png"
+    ],
+    "mesh_hash": 4132646749,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      7.94042472839356,
+      15.8808494567871
+    ]
+  },
+  "balsam": {
+    "center_y": 0.319818824529648,
+    "layers": [
+      "balsam-stem.png",
+      "balsam-leaf.png",
+      "balsam-stem-normal.png",
+      "balsam-leaf-normal.png"
+    ],
+    "mesh_hash": 231893574,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      0.341953629255295,
+      0.68390725851059
+    ]
+  },
+  "bilberry": {
+    "center_y": 0.168736577033997,
+    "layers": [
+      "bilberry-stem.png",
+      "bilberry-leaf.png",
+      "bilberry-stem-normal.png",
+      "bilberry-leaf-normal.png"
+    ],
+    "mesh_hash": 963671421,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      0.419999974966049,
+      0.839999949932098
+    ]
+  },
+  "birch": {
+    "center_y": 6.15227937698364,
+    "layers": [
+      "birch-stem.png",
+      "birch-leaf.png",
+      "birch-stem-normal.png",
+      "birch-leaf-normal.png"
+    ],
+    "mesh_hash": 1153306355,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      7.55999979972839,
+      15.1199995994568
+    ]
+  },
+  "bird_cherry": {
+    "center_y": 3.49746799468994,
+    "layers": [
+      "bird_cherry-stem.png",
+      "bird_cherry-leaf.png",
+      "bird_cherry-stem-normal.png",
+      "bird_cherry-leaf-normal.png"
+    ],
+    "mesh_hash": 365002410,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      3.75731989145279,
+      7.51463978290558
+    ]
+  },
+  "black_alder": {
+    "center_y": 7.50309944152832,
+    "layers": [
+      "black_alder-stem.png",
+      "black_alder-leaf.png",
+      "black_alder-stem-normal.png",
+      "black_alder-leaf-normal.png"
+    ],
+    "mesh_hash": 3498075194,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      8.05139973163605,
+      16.1027994632721
+    ]
+  },
+  "bracken": {
+    "center_y": 0.361266195774078,
+    "layers": [
+      "bracken-stem.png",
+      "bracken-leaf.png",
+      "bracken-stem-normal.png",
+      "bracken-leaf-normal.png"
+    ],
+    "mesh_hash": 3069982935,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      1.28819228410721,
+      2.57638456821442
+    ]
+  },
+  "fly_honeysuckle": {
+    "center_y": 0.89853709936142,
+    "layers": [
+      "fly_honeysuckle-stem.png",
+      "fly_honeysuckle-leaf.png",
+      "fly_honeysuckle-stem-normal.png",
+      "fly_honeysuckle-leaf-normal.png"
+    ],
+    "mesh_hash": 822217944,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      1.28822407722473,
+      2.57644815444946
+    ]
+  },
+  "grey_willow": {
+    "center_y": 1.67058777809143,
+    "layers": [
+      "grey_willow-stem.png",
+      "grey_willow-leaf.png",
+      "grey_willow-stem-normal.png",
+      "grey_willow-leaf-normal.png"
+    ],
+    "mesh_hash": 4177298971,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      2.7299998998642,
+      5.45999979972839
+    ]
+  },
+  "guelder_rose": {
+    "center_y": 1.29910016059875,
+    "layers": [
+      "guelder_rose-stem.png",
+      "guelder_rose-leaf.png",
+      "guelder_rose-stem-normal.png",
+      "guelder_rose-leaf-normal.png"
+    ],
+    "mesh_hash": 505224954,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      2.13487604856491,
+      4.26975209712982
+    ]
+  },
+  "hazel": {
+    "center_y": 1.74973356723785,
+    "layers": [
+      "hazel-stem.png",
+      "hazel-leaf.png",
+      "hazel-stem-normal.png",
+      "hazel-leaf-normal.png"
+    ],
+    "mesh_hash": 1675207952,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      2.50488034486771,
+      5.00976068973541
+    ]
+  },
+  "heather": {
+    "center_y": 0.17976601421833,
+    "layers": [
+      "heather-stem.png",
+      "heather-leaf.png",
+      "heather-stem-normal.png",
+      "heather-leaf-normal.png"
+    ],
+    "mesh_hash": 137325599,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      0.510300001502037,
+      1.02060000300407
+    ]
+  },
+  "juniper": {
+    "center_y": 1.19294357299805,
+    "layers": [
+      "juniper-stem.png",
+      "juniper-leaf.png",
+      "juniper-stem-normal.png",
+      "juniper-leaf-normal.png"
+    ],
+    "mesh_hash": 2903853452,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      1.75076149106026,
+      3.50152298212051
+    ]
+  },
+  "lily_of_valley": {
+    "center_y": 0.136605083942413,
+    "layers": [
+      "lily_of_valley-stem.png",
+      "lily_of_valley-leaf.png",
+      "lily_of_valley-stem-normal.png",
+      "lily_of_valley-leaf-normal.png"
+    ],
+    "mesh_hash": 2382160661,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      0.254772926867008,
+      0.509545853734016
+    ]
+  },
+  "lime": {
+    "center_y": 8.00380229949951,
+    "layers": [
+      "lime-stem.png",
+      "lime-leaf.png",
+      "lime-stem-normal.png",
+      "lime-leaf-normal.png"
+    ],
+    "mesh_hash": 210359431,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      8.5881591796875,
+      17.176318359375
+    ]
+  },
+  "lingonberry": {
+    "center_y": 0.0877660140395164,
+    "layers": [
+      "lingonberry-stem.png",
+      "lingonberry-leaf.png",
+      "lingonberry-stem-normal.png",
+      "lingonberry-leaf-normal.png"
+    ],
+    "mesh_hash": 1701529817,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      0.249479998648167,
+      0.498959997296333
+    ]
+  },
+  "male_fern": {
+    "center_y": 0.361073642969131,
+    "layers": [
+      "male_fern-stem.png",
+      "male_fern-leaf.png",
+      "male_fern-stem-normal.png",
+      "male_fern-leaf-normal.png"
+    ],
+    "mesh_hash": 1257539653,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      1.66593757867813,
+      3.33187515735626
+    ]
+  },
+  "maple": {
+    "center_y": 7.50309944152832,
+    "layers": [
+      "maple-stem.png",
+      "maple-leaf.png",
+      "maple-stem-normal.png",
+      "maple-leaf-normal.png"
+    ],
+    "mesh_hash": 3410714814,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      8.05139973163605,
+      16.1027994632721
+    ]
+  },
+  "meadowsweet": {
+    "center_y": 0.491278678178787,
+    "layers": [
+      "meadowsweet-stem.png",
+      "meadowsweet-leaf.png",
+      "meadowsweet-stem-normal.png",
+      "meadowsweet-leaf-normal.png"
+    ],
+    "mesh_hash": 3529628773,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      0.723013857007027,
+      1.44602771401405
+    ]
+  },
+  "oak": {
+    "center_y": 8.50450611114502,
+    "layers": [
+      "oak-stem.png",
+      "oak-leaf.png",
+      "oak-stem-normal.png",
+      "oak-leaf-normal.png"
+    ],
+    "mesh_hash": 355672527,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      9.12491912841797,
+      18.2498382568359
+    ]
+  },
+  "ostrich_fern": {
+    "center_y": 0.613169133663177,
+    "layers": [
+      "ostrich_fern-stem.png",
+      "ostrich_fern-leaf.png",
+      "ostrich_fern-stem-normal.png",
+      "ostrich_fern-leaf-normal.png"
+    ],
+    "mesh_hash": 2121417535,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      1.76884313821793,
+      3.53768627643585
+    ]
+  },
+  "pine": {
+    "center_y": 8.06138896942139,
+    "layers": [
+      "pine-stem.png",
+      "pine-leaf.png",
+      "pine-stem-normal.png",
+      "pine-leaf-normal.png"
+    ],
+    "mesh_hash": 3884314522,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      9.39610190391541,
+      18.7922038078308
+    ]
+  },
+  "raspberry": {
+    "center_y": 0.716937839984894,
+    "layers": [
+      "raspberry-stem.png",
+      "raspberry-leaf.png",
+      "raspberry-stem-normal.png",
+      "raspberry-leaf-normal.png"
+    ],
+    "mesh_hash": 2801962302,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      1.29399465322495,
+      2.58798930644989
+    ]
+  },
+  "rowan": {
+    "center_y": 4.49887609481812,
+    "layers": [
+      "rowan-stem.png",
+      "rowan-leaf.png",
+      "rowan-stem-normal.png",
+      "rowan-leaf-normal.png"
+    ],
+    "mesh_hash": 1206417801,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      5.29820938110352,
+      10.596418762207
+    ]
+  },
+  "spruce": {
+    "center_y": 5.99528121948242,
+    "layers": [
+      "spruce-stem.png",
+      "spruce-leaf.png",
+      "spruce-stem-normal.png",
+      "spruce-leaf-normal.png"
+    ],
+    "mesh_hash": 3932775172,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      6.39074106216431,
+      12.7814821243286
+    ]
+  },
+  "tufted_hairgrass": {
+    "center_y": 0.407215893268585,
+    "layers": [
+      "tufted_hairgrass-stem.png",
+      "tufted_hairgrass-leaf.png",
+      "tufted_hairgrass-stem-normal.png",
+      "tufted_hairgrass-leaf-normal.png"
+    ],
+    "mesh_hash": 1234967432,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      1.05477647781372,
+      2.10955295562744
+    ]
+  },
+  "wood_anemone": {
+    "center_y": 0.0889405459165573,
+    "layers": [
+      "wood_anemone-stem.png",
+      "wood_anemone-leaf.png",
+      "wood_anemone-stem-normal.png",
+      "wood_anemone-leaf-normal.png"
+    ],
+    "mesh_hash": 2907153387,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      0.191399073600769,
+      0.382798147201538
+    ]
+  },
+  "wood_sorrel": {
+    "center_y": 0.0853699967265129,
+    "layers": [
+      "wood_sorrel-stem.png",
+      "wood_sorrel-leaf.png",
+      "wood_sorrel-stem-normal.png",
+      "wood_sorrel-leaf-normal.png"
+    ],
+    "mesh_hash": 302770522,
+    "normal_encoding": "linear view-space XYZ, RGBA8; camera +Z, baked yaw n*pi/2",
+    "size": [
+      0.150780674815178,
+      0.301561349630356
+    ]
+  }
+}

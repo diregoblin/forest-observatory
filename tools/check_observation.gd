@@ -188,9 +188,9 @@ func _check_displayed_state() -> bool:
 	var climate := ForestClimate.sample(0, 200)
 	view.refresh_trees(climate)
 	var shape := view.selection_shape(0).duplicate(true)
-	var submitted: Transform3D = view.tree_groups[0].multimesh.get_instance_transform(0)
-	var submitted_leaf: float = view.tree_groups[0].multimesh.get_instance_custom_data(0).r
-	var mesh_bounds: AABB = view.tree_groups[0].multimesh.mesh.get_aabb()
+	var submitted: Transform3D = view.batch_for(0).multimesh.get_instance_transform(0)
+	var submitted_leaf: float = view.batch_for(0).multimesh.get_instance_custom_data(0).r
+	var mesh_bounds: AABB = view.batch_for(0).multimesh.mesh.get_aabb()
 	var okay: bool = shape.transform == submitted and shape.bounds == submitted * mesh_bounds
 	okay = okay and is_equal_approx(shape.leaves, submitted_leaf)
 	# Mutate the model as a growth/death tick would, without calling the view.
@@ -200,18 +200,32 @@ func _check_displayed_state() -> bool:
 	plants.stress[0] = 1
 	plants.ticks += 1
 	okay = okay and view.selection_shape(0) == shape
-	okay = okay and view.tree_groups[0].multimesh.get_instance_transform(0) == submitted
+	okay = okay and view.batch_for(0).multimesh.get_instance_transform(0) == submitted
 	view.refresh_trees(climate)
 	var refreshed := view.selection_shape(0)
-	var next_transform: Transform3D = view.tree_groups[0].multimesh.get_instance_transform(0)
+	var next_transform: Transform3D = view.batch_for(0).multimesh.get_instance_transform(0)
 	okay = okay and refreshed.transform == next_transform and next_transform != submitted
 	okay = okay and refreshed.bounds == next_transform * mesh_bounds
 	okay = okay and refreshed.leaves == 0
-	okay = okay and view.tree_groups[0].multimesh.get_instance_custom_data(0).r == 0
+	okay = okay and view.batch_for(0).multimesh.get_instance_custom_data(0).r == 0
 	var new_id := plants._append(0, Vector3(66, 0, 65), .2, 0)
 	okay = okay and view.selection_shape(new_id).is_empty()
 	view.refresh_trees(climate)
 	okay = okay and not view.selection_shape(new_id).is_empty()
+	# A partial smooth update must keep both changed and not-yet-visited picks
+	# aligned with the actual submitted geometry, including appended seedlings.
+	for index in 300:
+		plants._append(0, Vector3(70 + index % 20, 0, 70 + index / 20), .3, 1)
+	view.refresh_trees(climate)
+	for id in plants.size.size():
+		plants.size[id] *= .5
+	view.advance_display(.025, climate)
+	okay = okay and view.last_batch_count > 0 and view.last_batch_count <= 128
+	for id in plants.size.size():
+		var multi: MultiMesh = view.batch_for(id).multimesh
+		var actual := multi.get_instance_transform(view.member_slots[id])
+		var shown := view.selection_shape(id)
+		okay = okay and shown.transform == actual and shown.bounds == actual * mesh_bounds
 	var soil := ForestSoil.new(water)
 	var animals := ForestAnimals.new(land, plants, water, soil)
 	var animal_view := ForestAnimalsView.new()
@@ -245,6 +259,7 @@ func _hare_scenario() -> Dictionary:
 	var soil := ForestSoil.new(water)
 	var plants := ForestTrees.new(land, soil)
 	var fungi := ForestFungi.new(water, soil)
+	plants.mycorrhiza = fungi
 	var animals := ForestAnimals.new(land, plants, water, soil)
 	var start_position: Vector3 = animals.positions[0]
 	var initial_local_food := 0.0
@@ -294,5 +309,5 @@ func _hare_scenario() -> Dictionary:
 		"daily": daily,
 		"wall_seconds": (Time.get_ticks_msec() - started) / 1000.0,
 		"boundary":
-		"Shipped seed, 66 coupled fixed ticks, no reset; not multiple-seed viability or mouse observation"
+		"Shipped seed and coupled fixed ticks, no reset; not multiple-seed viability or mouse observation"
 	}

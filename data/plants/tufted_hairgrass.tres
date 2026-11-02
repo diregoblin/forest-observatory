@@ -1,67 +1,67 @@
 [gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=11 format=3]
-
 [ext_resource type="Script" path="res://scripts/plant_definition.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/plant_module.gd" id="2"]
-
-[sub_resource type="CylinderMesh" id="BaseMesh"]
-top_radius = 0.03
-bottom_radius = 0.05
-height = 0.05
-radial_segments = 6
-[sub_resource type="CylinderMesh" id="InnerBladeMesh"]
-top_radius = 0.003
-bottom_radius = 0.012
-height = 0.75
-radial_segments = 3
-[sub_resource type="CylinderMesh" id="OuterBladeMesh"]
-top_radius = 0.002
-bottom_radius = 0.01
-height = 0.9
-radial_segments = 3
-[sub_resource type="SphereMesh" id="PanicleMesh"]
+[ext_resource type="Texture2D" path="res://art/herbs/blade.png" id="mask"]
+[sub_resource type="QuadMesh" id="Card"]
+size = Vector2(1, 1)
+[sub_resource type="SphereMesh" id="Unit"]
 radius = 1.0
 height = 2.0
-radial_segments = 5
-rings = 3
-[sub_resource type="Resource" id="Base"]
+radial_segments = 6
+rings = 2
+[sub_resource type="Resource" id="M0"]
 script = ExtResource("2")
-mesh = SubResource("BaseMesh")
-offset = Vector3(0, 0.025, 0)
-color = Color(0.4, 0.35, 0.2, 1)
-[sub_resource type="Resource" id="InnerBlades"]
-script = ExtResource("2")
-mesh = SubResource("InnerBladeMesh")
+mesh = SubResource("Card")
+shape = "leaf_card"
 foliage = true
-count = 9
-offset = Vector3(0, 0.38, 0)
+color = Color(0.29, 0.43, 0.22, 1)
+scale_start = Vector3(0.012, 0.67, 0.67)
+count = 15
+turn = 2.39996
 radial_offset = 0.025
-turn = 0.7
-rotation_degrees = Vector3(0, 0, 4)
-scale_start = Vector3(1, 1, 1)
-scale_step = Vector3(0, -0.03, 0)
-color = Color(0.33, 0.45, 0.18, 1)
-[sub_resource type="Resource" id="OuterBlades"]
+rotation_degrees = Vector3(-62, 0, 0)
+card_curve = 0.17
+card_fold = 0.14
+[sub_resource type="Resource" id="M1"]
 script = ExtResource("2")
-mesh = SubResource("OuterBladeMesh")
+mesh = SubResource("Card")
+shape = "leaf_card"
 foliage = true
-count = 14
-offset = Vector3(0, 0.3, 0)
-radial_offset = 0.055
-turn = 0.45
-rotation_degrees = Vector3(0, 0, 20)
-scale_start = Vector3(1, 1, 1)
-scale_step = Vector3(0, -0.02, 0)
-color = Color(0.38, 0.48, 0.2, 1)
-[sub_resource type="Resource" id="Panicles"]
+color = Color(0.29, 0.43, 0.22, 1)
+scale_start = Vector3(0.01, 0.48, 0.48)
+count = 11
+turn = 2.39996
+radial_offset = 0.035
+rotation_degrees = Vector3(-35, 0, 0)
+card_curve = 0.18
+[sub_resource type="CylinderMesh" id="Axis2"]
+height = 0.78
+bottom_radius = 0.0016
+top_radius = 0.00044800000000000005
+radial_segments = 5
+[sub_resource type="Resource" id="M2"]
 script = ExtResource("2")
-mesh = SubResource("PanicleMesh")
+mesh = SubResource("Axis2")
+shape = "shoot"
+color = Color(0.38, 0.43, 0.24, 1)
+count = 7
+radial_offset = 0.04
+turn = 2.39996
+tip_offset = Vector3(0.045, 0, 0)
+bend = Vector3(0.018, 0, 0)
+[sub_resource type="Resource" id="M3"]
+script = ExtResource("2")
+mesh = SubResource("Unit")
+shape = "panicle"
+component_kind = &"ordinary"
 foliage = true
-count = 10
-offset = Vector3(0, 0.68, 0)
-radial_offset = 0.07
-turn = 2.4
-scale_start = Vector3(0.018, 0.045, 0.018)
-color = Color(0.65, 0.58, 0.35, 1)
+color = Color(0.64, 0.58, 0.36, 1)
+scale_start = Vector3(0.11, 0.11, 0.11)
+count = 7
+radial_offset = 0.09
+turn = 2.39996
+offset = Vector3(0, 0.76, 0)
+cluster_members = 13
 [resource]
 script = ExtResource("1")
 species_id = &"tufted_hairgrass"
@@ -100,4 +100,8 @@ flood_depth_m = 0.35
 stress_days = 16.0
 recovery_days = 8.0
 lifespan_years = 7.0
-modules = Array[ExtResource("2")]([SubResource("Base"), SubResource("InnerBlades"), SubResource("OuterBlades"), SubResource("Panicles")])
+mycorrhiza_type = &"arbuscular"
+
+initial_habitat_weights = Vector4(0.1, 2.5, 3, 0.08)
+canopy_texture = ExtResource("mask")
+modules = Array[ExtResource("2")]([SubResource("M0"), SubResource("M1"), SubResource("M2"), SubResource("M3")])

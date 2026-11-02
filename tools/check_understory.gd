@@ -7,6 +7,8 @@ func chamber(
 	poor := false, scarce := false, plant_path := "res://data/plants/wood_sorrel.tres"
 ) -> Dictionary:
 	var settings: ForestSettings = CONFIG.duplicate(true)
+	# Controlled single-death budget assay, not the valley's starting composition.
+	settings.initial_fallen_fraction = 0
 	settings.water_resolution = 4
 	settings.tree_attempts = 64
 	settings.start_day = 180

@@ -1,72 +1,45 @@
-[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=11 format=3]
-
+[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=9 format=3]
 [ext_resource type="Script" path="res://scripts/plant_definition.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/plant_module.gd" id="2"]
-
-[sub_resource type="CylinderMesh" id="CaneMesh"]
-top_radius = 0.008
-bottom_radius = 0.03
-height = 1.3
-radial_segments = 5
-[sub_resource type="CylinderMesh" id="BranchMesh"]
-top_radius = 0.006
-bottom_radius = 0.018
-height = 0.8
-radial_segments = 5
-[sub_resource type="SphereMesh" id="LeafMesh"]
-radius = 1.0
-height = 1.2
-radial_segments = 7
-rings = 4
-[sub_resource type="SphereMesh" id="BerryMesh"]
+[ext_resource type="Texture2D" path="res://art/herbs/serrated.png" id="mask"]
+[sub_resource type="QuadMesh" id="Card"]
+size = Vector2(1, 1)
+[sub_resource type="SphereMesh" id="Unit"]
 radius = 1.0
 height = 2.0
 radial_segments = 6
-rings = 3
-[sub_resource type="Resource" id="Canes"]
+rings = 2
+[sub_resource type="CylinderMesh" id="Axis0"]
+height = 1.3
+bottom_radius = 0.011
+top_radius = 0.0030800000000000003
+radial_segments = 5
+[sub_resource type="Resource" id="M0"]
 script = ExtResource("2")
-mesh = SubResource("CaneMesh")
-count = 6
-offset = Vector3(0, 0.65, 0)
-radial_offset = 0.06
-turn = 1.047
-rotation_degrees = Vector3(0, 0, 28)
-scale_start = Vector3(1, 1, 1)
-scale_step = Vector3(0, 0.08, 0)
-color = Color(0.48, 0.28, 0.2, 1)
-[sub_resource type="Resource" id="Branches"]
-script = ExtResource("2")
-mesh = SubResource("BranchMesh")
-count = 8
-offset = Vector3(0, 0.9, 0)
-step = Vector3(0, 0.05, 0)
-radial_offset = 0.08
-turn = 1.2
-rotation_degrees = Vector3(0, 0, 50)
-scale_start = Vector3(1, 1, 1)
-scale_step = Vector3(0, -0.04, 0)
-color = Color(0.52, 0.36, 0.26, 1)
-[sub_resource type="Resource" id="Leaves"]
-script = ExtResource("2")
-mesh = SubResource("LeafMesh")
-foliage = true
-count = 16
-offset = Vector3(0, 0.45, 0)
-step = Vector3(0, 0.05, 0)
-radial_offset = 0.16
-turn = 2.4
-scale_start = Vector3(0.18, 0.08, 0.14)
-color = Color(0.22, 0.38, 0.14, 1)
-[sub_resource type="Resource" id="Berries"]
-script = ExtResource("2")
-mesh = SubResource("BerryMesh")
+mesh = SubResource("Axis0")
+shape = "shoot"
+color = Color(0.4, 0.27, 0.18, 1)
 count = 5
-offset = Vector3(0, 0.8, 0)
-step = Vector3(0, -0.05, 0)
-radial_offset = 0.14
-turn = 2.4
-scale_start = Vector3(0.035, 0.035, 0.035)
-color = Color(0.6, 0.1, 0.12, 1)
+radial_offset = 0.045
+turn = 1.256637
+scale_step = Vector3(0, 0.045, 0)
+tip_offset = Vector3(0.43, -0.12, 0.05)
+bend = Vector3(0.16, 0.13, 0.02)
+leaf_count = 7
+leaflet_pairs = 1
+leaf_size = Vector2(0.17, 0.30)
+leaf_color = Color(0.3, 0.43, 0.23, 1)
+[sub_resource type="Resource" id="M1"]
+script = ExtResource("2")
+mesh = SubResource("Unit")
+shape = "aggregate"
+component_kind = &"fruit"
+color = Color(0.65, 0.16, 0.19, 1)
+count = 5
+radial_offset = 0.35
+offset = Vector3(0, 0.99, 0)
+turn = 1.256637
+scale_start = Vector3(0.034, 0.034, 0.034)
 [resource]
 script = ExtResource("1")
 species_id = &"raspberry"
@@ -105,4 +78,17 @@ flood_depth_m = 0.2
 stress_days = 12.0
 recovery_days = 8.0
 lifespan_years = 12.0
-modules = Array[ExtResource("2")]([SubResource("Canes"), SubResource("Branches"), SubResource("Leaves"), SubResource("Berries")])
+mycorrhiza_type = &"arbuscular"
+
+fruit_bearing = true
+insect_pollinated = true
+flower_start_day = 155.0
+fruit_start_day = 205.0
+
+initial_habitat_weights = Vector4(0.5, 1.5, 0.3, 0.02)
+
+canopy_layers = 4
+branch_radius_m = 0.012
+branch_droop = 0.2
+canopy_texture = ExtResource("mask")
+modules = Array[ExtResource("2")]([SubResource("M0"), SubResource("M1")])

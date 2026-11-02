@@ -1,6 +1,7 @@
-[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=7 format=3]
+[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=8 format=3]
 [ext_resource type="Script" path="res://scripts/plant_definition.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/plant_module.gd" id="2"]
+[ext_resource type="Texture2D" path="res://art/canopy/needles.png" id="canopy"]
 [sub_resource type="CylinderMesh" id="TrunkMesh"]
 top_radius = 0.12
 bottom_radius = 0.3
@@ -49,3 +50,16 @@ germination_fraction = 0.1
 recruitment_light = 0.1
 weight = 0.52
 modules = Array[ExtResource("2")]([SubResource("Trunk"), SubResource("Crown")])
+mycorrhiza_type = &"ecto"
+
+nurse_log_affinity = 0.7
+snow_retention = 0.9
+
+initial_habitat_weights = Vector4(2, 0.001, 0.005, 0.001)
+
+canopy_texture = ExtResource("canopy")
+canopy_layers = 4
+canopy_leaf_span_m = 0.1
+canopy_color = Color(0.29,0.4,0.35,1)
+branch_radius_m = 0.1
+branch_droop = 0.12

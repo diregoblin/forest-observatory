@@ -6,6 +6,7 @@ extends RefCounted
 var land: ForestLandscape
 var soil: ForestSoil
 var plots: Array[Dictionary] = []
+var positions := PackedVector3Array()  # Fixed cell centres for the common observer.
 var elapsed_s := 0.0
 var ticks := 0
 var step_usec := 0
@@ -19,8 +20,8 @@ func _init(water: ForestWatershed, shared_soil: ForestSoil = null) -> void:
 	var n := config.fungi_resolution
 	var dx := config.fungi_cell_m
 	var size := n * dx
-	var definition := config.fungus
 	for index in config.fungi_plot_centers.size():
+		var definition := config.fungus_for_plot(index)
 		var center := config.fungi_plot_centers[index] * config.extent
 		var origin := Vector2(
 			clampf(center.x - size / 2, 0, config.extent - size),
@@ -37,6 +38,9 @@ func _init(water: ForestWatershed, shared_soil: ForestSoil = null) -> void:
 		for y in n:
 			for x in n:
 				var k := y * n + x
+				var px := origin.x + (x + .5) * dx
+				var pz := origin.y + (y + .5) * dx
+				positions.append(Vector3(px, land.height_at(px, pz), pz))
 				var local := Vector2((x + .5 - n / 2.0) * dx, (y + .5 - n / 2.0) * dx)
 				var seeded := local.length() < .6
 				if index == 1:
@@ -84,7 +88,13 @@ func _init(water: ForestWatershed, shared_soil: ForestSoil = null) -> void:
 			_require(patch >= 0)
 			_require(core.bind_soil(soil.native, patch))
 		plots.append(
-			{"origin": origin, "native": core, "fields": core.fields(), "metrics": core.metrics()}
+			{
+				"origin": origin,
+				"definition": definition,
+				"native": core,
+				"fields": core.fields(),
+				"metrics": core.metrics()
+			}
 		)
 
 
@@ -152,7 +162,7 @@ func restore(state: Dictionary) -> bool:
 		if (
 			s.get("n") != land.settings.fungi_resolution
 			or s.get("dx") != land.settings.fungi_cell_m
-			or s.get("options") != land.settings.fungus.options()
+			or s.get("options") != land.settings.fungus_for_plot(i).options()
 		):
 			return false
 		if absf(float(s.get("time_s", -1.0)) - seconds) > 1e-10 * maxf(1.0, seconds):
@@ -167,6 +177,7 @@ func restore(state: Dictionary) -> bool:
 		candidates.append(
 			{
 				"origin": saved.origin,
+				"definition": land.settings.fungus_for_plot(i),
 				"native": core,
 				"fields": core.fields(),
 				"metrics": core.metrics()
@@ -187,10 +198,39 @@ func _configuration() -> Array:
 		c.fungi_cell_m,
 		c.fungi_plot_centers,
 		c.fungus.options(),
+		_fungal_configuration(),
 		c.ecology_step_s,
 		c.year_speed_multiplier,
 		soil != null
 	]
+
+
+func _fungal_configuration() -> Array:
+	var result := []
+	for index in land.settings.fungi_plot_centers.size():
+		var d := land.settings.fungus_for_plot(index)
+		result.append([d.species_id, d.trophic_type, d.exchange_radius_m, d.options()])
+	return result
+
+
+func trade(
+	position: Vector3, nitrogen: float, phosphorus: float, carbon: float
+) -> PackedFloat64Array:
+	var result := PackedFloat64Array([0, 0, 0])
+	for plot in plots:
+		var d: ForestFungusDefinition = plot.definition
+		if d.trophic_type != &"ectomycorrhizal" or carbon <= result[0]:
+			continue
+		var supplied: PackedFloat64Array = plot.native.trade(
+			position,
+			maxf(0, nitrogen - result[1]),
+			maxf(0, phosphorus - result[2]),
+			carbon - result[0],
+			d.exchange_radius_m
+		)
+		for element in 3:
+			result[element] += supplied[element]
+	return result
 
 
 static func _require(ok: bool) -> void:
@@ -244,3 +284,31 @@ func observation_center() -> Vector2:
 func element_totals() -> Vector3:
 	var m := metrics()
 	return Vector3(m.carbon_kg, m.nitrogen_kg, m.phosphorus_kg)
+
+
+func inspect(id: int) -> Dictionary:
+	if id < 0 or id >= positions.size():
+		return {}
+	var cells := land.settings.fungi_resolution * land.settings.fungi_resolution
+	var plot: Dictionary = plots[id / cells]
+	var k := id % cells
+	var d: ForestFungusDefinition = plot.definition
+	var area := land.settings.fungi_cell_m * land.settings.fungi_cell_m
+	return {
+		"kind": "fungus",
+		"title": d.display_name,
+		"subtitle": d.latin_name,
+		"description":
+		"Плодовые тела показывают запас общей ячейки мицелия. Картинка может представлять одиночный гриб или группу, не отдельный организм с собственной массой.",
+		"source_url": d.source_url,
+		"alive": plot.fields.fruit[k] > 0,
+		"stage": "Плодовые тела · ячейка %d" % k,
+		"details":
+		{
+			"Питание": "Сапротроф" if d.trophic_type == &"saprotroph" else "Эктомикориза",
+			"Мицелий": "%.3f г C в ячейке" % (plot.fields.biomass[k] * area * 1000),
+			"Плодовые тела": "%.3f г C в ячейке" % (plot.fields.fruit[k] * area * 1000),
+			"Область": "%d · ячейка %.2f м" % [id / cells + 1, land.settings.fungi_cell_m],
+			"Учёт": "Последний снимок полей; общие запасы модели, не масса нарисованной шляпки"
+		}
+	}

@@ -6,6 +6,29 @@ var barrier: ForestBarrier
 var moving := false
 var yaw := 0.0
 var pitch := 0.0
+var followed_id := -1
+var followed_point := Vector3.ZERO
+
+
+func follow(id: int, point: Vector3) -> void:
+	moving = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	followed_id = id
+	followed_point = point
+
+
+func stop_following() -> void:
+	followed_id = -1
+
+
+func track_displayed(point: Vector3) -> void:
+	# Translate the existing viewpoint with submitted geometry, not a model tick.
+	# Its world-space angle and distance do not depend on the animal's heading.
+	if followed_id < 0:
+		return
+	position += point - followed_point
+	followed_point = point
+	position.y = maxf(position.y, land.height_at(position.x, position.z) + .25)
 
 
 func configure(landscape: ForestLandscape, obstacle: ForestBarrier) -> void:
@@ -41,9 +64,12 @@ func _process(dt: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.physical_keycode == KEY_ESCAPE:
+		stop_following()
 		moving = false
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
+		if event.pressed:
+			stop_following()
 		moving = event.pressed
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if moving else Input.MOUSE_MODE_VISIBLE
 		yaw = self.rotation.y
@@ -55,6 +81,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func view(n: int) -> void:
+	stop_following()
 	var target: Vector3
 	if n == 1:
 		self.position = Vector3(.762, .303, .914) * land.settings.extent
@@ -71,6 +98,7 @@ func view(n: int) -> void:
 
 
 func view_plot(center: Vector2) -> void:
+	stop_following()
 	var target := Vector3(center.x, land.height_at(center.x, center.y) + .15, center.y)
 	self.position = Vector3(
 		center.x + 4.5, land.height_at(center.x + 4.5, center.y + 8.5) + 2.3, center.y + 8.5

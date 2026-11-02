@@ -1,0 +1,20 @@
+[
+  {
+    "source": "res://data/plants/birch.tres",
+    "mask": "res://art/canopy-study/birch-leaves.png",
+    "repeat": [
+      8.0,
+      4.0
+    ],
+    "coverage": 0.3537406921386719
+  },
+  {
+    "source": "res://data/plants/oak.tres",
+    "mask": "res://art/canopy-study/oak-leaves.png",
+    "repeat": [
+      6.0,
+      3.0
+    ],
+    "coverage": 0.43585205078125
+  }
+]

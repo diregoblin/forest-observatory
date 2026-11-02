@@ -1,0 +1,36 @@
+{
+  "source": "/run/media/pavel/Storage/src/fluid-sim/project",
+  "inherited_head": "bab6d3b177edd8602dfea7ad83a5ee5dcdf35d6d",
+  "copied_working_tree": true,
+  "files_sha256": {
+    "modules/fluid/README.md": "acd588a6717186ed7491dce71d01a9e1664afe8f827fea43d107c718047fbd78",
+    "modules/fluid/fluid_liquid.gd": "49878f92273353284049cfa52173ee80c3f1c0f7e93f507ee23ddf20c3c49a3f",
+    "modules/fluid/fluid_settings.gd": "5f33bdf4a33f13942136df5e0bab19ea9f9daee3df574f03edf9deb8f77ccc5a",
+    "modules/fluid/fluid_simulation.gd": "c452996a1b6dfe911113157c981fa3c465a73961c9a5b0229770aeba7a6c6358",
+    "modules/fluid/fluid_simulation.tscn": "c4d5de8f66837b1165a83d37d329a599e0cb5fff265192d44d6c8284923f9801",
+    "modules/fluid/liquids/ivory.tres": "4ac0f6eb25c07d626869effb0361123e4e843012943fab7af0665e848f3c58c3",
+    "modules/fluid/liquids/library.gd": "77c55ae5a133e74b5e604556d8872912387ca842a69d412c05cb55e64df922ba",
+    "modules/fluid/liquids/oil.tres": "704ef0e32863a38739c023f805f2e92871cfda81fbc1d0f99cec20846c17cc05",
+    "modules/fluid/liquids/slime.tres": "20c0582ce03ff5301631761c9f6cf19593aa4b98316353c51df3ab6857991fe1",
+    "modules/fluid/liquids/syrup.tres": "1cd63d099f53eaf1ab0bfde16c33634edbfcc6dcb91f02144a3ab35fbe75d449",
+    "modules/fluid/liquids/water.tres": "41c9cafb6f2337d4697267431a5c22fa96a50019240546a3078d6717a9ee8cf3",
+    "modules/fluid/particle_boundary.gd": "ab995e538a99dd7cfff0f9aabb73a6e1a7bd225aca6b1eac6b2f3393f25a6944",
+    "modules/fluid/render/water.glsl": "f6c35e8fefb0168a8c192e9ecaa94afcc60f6e30209136f01790790d129aa249",
+    "modules/fluid/render/water_effect.gd": "4f0624556c4fd55dca316d0dcf3869038178147f61626f872dfe9f3bac86f880",
+    "modules/fluid/shaders/boundary_transform.glsl": "0bc86fb572e04d068c0bac4f1c0e5c33f82ca4039540a528b9a98379f730d680",
+    "modules/fluid/shaders/compute_fluid.glsl": "dcef1d93324848ae3d47108dcc490ad16121161d6856259e3de86a62846d08f9",
+    "modules/fluid/shaders/pref_sum.glsl": "a0d1eb453c0da2054be23a2bcbe365ff824ecb5a56c9a177240ca4056ec4d749",
+    "modules/fluid/LICENSE": "114ec62883e5f7adf86defb5a643508a6a3da777345edfb11b3e9cab9b7b692d"
+  },
+  "hashes_describe": "Source working-tree content at copy time; local port changes are listed separately.",
+  "local_modifications": {
+    "modules/fluid/fluid_simulation.gd": "Three shader loads use process-local RenderingDevice source compiler; equations and dispatch unchanged.",
+    "modules/fluid/render/water_effect.gd": "One shader preload uses the same source-compiler shim.",
+    "added": [
+      "modules/fluid/compute_shader.gd",
+      "modules/fluid/shaders/.gdignore",
+      "modules/fluid/render/.gdignore",
+      "modules/fluid/FOREST_PORT.md"
+    ]
+  }
+}

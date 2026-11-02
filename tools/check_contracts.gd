@@ -10,7 +10,8 @@ func _initialize() -> void:
 		assert(mesh.surface_get_array_len(0) > 0)
 		var has_foliage := false
 		for module in definition.modules:
-			has_foliage = has_foliage or module.foliage
+			# A shoot owns attached leaf cards as well as its woody axis.
+			has_foliage = has_foliage or module.foliage or module.leaf_count > 0
 		assert(has_foliage, "seasonal foliage geometry must survive resource loading")
 		var colors: PackedColorArray = mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
 		var leaf_vertices := 0

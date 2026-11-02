@@ -1,0 +1,89 @@
+[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=8 format=3]
+[ext_resource type="Script" path="res://scripts/plant_definition.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/plant_module.gd" id="2"]
+[ext_resource type="Texture2D" path="res://art/canopy/needles.png" id="canopy"]
+[sub_resource type="CylinderMesh" id="StemMesh"]
+top_radius = 0.07
+bottom_radius = 0.22
+height = 11.700000000000001
+radial_segments = 6
+
+[sub_resource type="Resource" id="Stems"]
+script = ExtResource("2")
+mesh = SubResource("StemMesh")
+count = 1
+offset = Vector3(0, 5.8500000000000005, 0)
+radial_offset = 0.0
+turn = 2.4
+color = Color(0.36,0.29,0.19, 1)
+
+[sub_resource type="CylinderMesh" id="LeafMesh"]
+top_radius = 0.0
+bottom_radius = 1.0
+height = 1.0
+radial_segments = 9
+
+[sub_resource type="Resource" id="Crown"]
+script = ExtResource("2")
+mesh = SubResource("LeafMesh")
+foliage = true
+count = 5
+offset = Vector3(0, 10.080000000000002, 0)
+step = Vector3(0, 1.08, 0)
+radial_offset = 1.3607999999999998
+turn = 2.4
+scale_start = Vector3(3.2399999999999998, 3.6, 2.7539999999999996)
+color = Color(0.20,0.32,0.19, 1)
+[resource]
+script = ExtResource("1")
+species_id = &"pine"
+display_name = "Сосна обыкновенная"
+latin_name = "Pinus sylvestris"
+description = "Светолюбивое хвойное дерево с высоко поднятой кроной; эктомикоризный хозяин."
+source_url = "https://powo.science.kew.org/results?q=Pinus%20sylvestris"
+growth_form = &"tree"
+life_cycle = &"perennial"
+initial_age_years = Vector2(5,55)
+biomass_kg_c = 60
+cn_ratio = 45
+cp_ratio = 500
+dead_decay_per_year = 0.12
+edible_fraction = 0.0
+mature_age_years = 15
+seed_cost_kg_c = 0.001
+reproduction_per_year = 0.4
+dispersal_m = 15.0
+germination_fraction = 0.18
+recruitment_light = 0.28
+weight = 0.055
+wind_strength = 0.02
+deciduous = false
+leaf_on_day = 110.0
+leaf_off_day = 255.0
+leaf_transition_days = 20.0
+autumn_color = Color(0.75,0.57,0.20,1)
+reference_height_m = 18
+max_height_m = 32.4
+crown_radius_m = 3.6
+height_growth_m_year = 0.6300000000000001
+transpiration_m_s = 2.3e-08
+minimum_light = 0.28
+flood_depth_m = 0.15
+stress_days = 18.0
+recovery_days = 8.0
+lifespan_years = 250.0
+leaf_mass_fraction = 0.04
+mycorrhiza_type = &"ecto"
+modules = Array[ExtResource("2")]([SubResource("Stems"), SubResource("Crown")])
+
+nurse_log_affinity = 0.3
+snow_retention = 0.6
+
+initial_habitat_weights = Vector4(1.8, 0.001, 0.001, 0.28)
+
+canopy_texture = ExtResource("canopy")
+canopy_layers = 4
+canopy_leaf_span_m = 0.16
+canopy_color = Color(0.33,0.43,0.36,1)
+branch_radius_m = 0.12
+branch_droop = 0.08

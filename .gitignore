@@ -7,8 +7,13 @@ artifacts/*.png
 artifacts/*.json
 artifacts/*.import
 artifacts/*.bin
+artifacts/smoothness-rollback/
 native/build*/
 native/deps/
 native/api/
 .preview-tools
 addons/forest_hydro/bin/
+artifacts/**
+!artifacts/.gitkeep
+__pycache__/
+*.py[cod]

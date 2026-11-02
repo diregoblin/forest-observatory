@@ -1,0 +1,16 @@
+{
+  "seed": 20261102,
+  "size": 512,
+  "tile_m": 1.6,
+  "provenance": "Original CPU procedural turf; inspired by lucillenull's node-texture example, not copied pixels.",
+  "reference": "https://x.com/lucillenull/status/2117207091849138551/photo/1",
+  "channels": {
+    "albedo-height": "sRGB RGB, linear A=height/0.016m",
+    "normal-roughness-ao": "linear RG=normal XZ*0.5+0.5, B=roughness, A=AO"
+  },
+  "sha256": {
+    "albedo-height.png": "832472b2d47dc03d4a708b55174af043ddf88325b649e4e3a01c7a74892fc153",
+    "normal-roughness-ao.png": "aa0e49221a756bd96e2b2a17d752a3ca43628bb4dfc21d8e08cfb11f13b94d59",
+    "upright-tuft.png": "d3d01e7416bf74524eb1180e29f2da08e1c24c66b9cec4c04b67f37f7658169e"
+  }
+}

@@ -2,7 +2,8 @@ class_name ForestClimate
 extends RefCounted
 
 ## A 365-day biological calendar. Water remains on its own SI clock.
-## No leap years, automatic storms, snowpack or freeze/thaw in this first slice.
+## Baseline seasonal forcing; ForestWeather adds fronts and a snow-water bucket.
+## No leap years or freeze/thaw thermodynamics.
 const DAY_S := 86400.0
 const YEAR_S := 365.0 * DAY_S
 

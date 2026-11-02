@@ -31,12 +31,30 @@ static func run(world) -> void:
 					if before.models[key][field] != after.models[key][field]:
 						print("ROLLBACK_DIFFERENCE ", key, ".", field)
 	assert(after == before, "late restore rejection rolls all models back")
+	corrupt = before.duplicate(true)
+	corrupt.models.animals.life_records[0].rested_s = INF
+	assert(
+		not world._restore_world(corrupt) and world._world_snapshot() == before,
+		"Corrupt personal records must roll the whole world back"
+	)
 	for selection in [
 		{"id": 0}, {"kind": &"plant", "id": "oops"}, {"kind": &"animal", "id": 999999}
 	]:
 		corrupt = before.duplicate(true)
 		corrupt.scene.selection = selection
 		assert(not world._restore_world(corrupt) and world._world_snapshot() == before)
+	corrupt = before.duplicate(true)
+	corrupt.models.weather.snow_water_m = 1
+	assert(not world._restore_world(corrupt) and world._world_snapshot() == before)
+	corrupt = before.duplicate(true)
+	corrupt.models.habitat.traffic[0] = -1.0
+	assert(not world._restore_world(corrupt) and world._world_snapshot() == before)
+	corrupt = before.duplicate(true)
+	corrupt.models.habitat.detritivore_c[0] = -1
+	assert(not world._restore_world(corrupt) and world._world_snapshot() == before)
+	corrupt = before.duplicate(true)
+	corrupt.models.animals.home_positions[0].x = NAN
+	assert(not world._restore_world(corrupt) and world._world_snapshot() == before)
 	corrupt = before.duplicate(true)
 	corrupt.models.clock.ticks += 1
 	assert(not world._restore_world(corrupt) and world._world_snapshot() == before)
@@ -52,6 +70,13 @@ static func run(world) -> void:
 	for e in 3:
 		errors[e] = world._ecosystem_budget()[e] - budget[e]
 		assert(absf(errors[e]) < 1e-4, "multi-day composed ecosystem budget")
+	assert(
+		world.habitat.traffic.count(0) < world.habitat.traffic.size(),
+		"Production animal paths create real traffic"
+	)
+	var legacy: Dictionary = world._world_snapshot()
+	legacy.models.animals.version = 1
+	assert(not world._restore_world(legacy), "Old behavior versions are deliberately incompatible")
 	world.soil.deposit_elements(world.trees.positions[0], 0, .01, 0, false)
 	assert(world._ecosystem_budget()[1] - budget[1] > .009, "budget detects injected nitrogen")
 	assert(world._restore_world(original))
@@ -64,10 +89,13 @@ static func run(world) -> void:
 		"binary_roundtrip": true,
 		"exact_continuation": true,
 		"atomic_late_rejection": true,
+		"personal_record_rejection_atomic": true,
+		"older_behavior_version_rejected": true,
 		"invalid_scene_rejected": true,
 		"invalid_selection_rejected": true,
 		"inconsistent_clocks_rejected": true,
-		"moved_soil_patch_rejected": true
+		"moved_soil_patch_rejected": true,
+		"weather_habitat_home_rejection_atomic": true
 	}
 	var file := FileAccess.open("res://artifacts/world-check.json", FileAccess.WRITE)
 	file.store_string(JSON.stringify(report, "  "))

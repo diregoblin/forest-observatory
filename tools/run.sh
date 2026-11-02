@@ -15,4 +15,9 @@ if [[ ! -f "$project_root/addons/forest_hydro/bin/libforest_hydro.so" ]]; then
   printf 'Native hydrology is not built. Run: %s/tools/build_hydro.sh\n' "$project_root" >&2
   exit 1
 fi
-exec "$redot_bin" --path "$project_root" "$@"
+guard_args=()
+if [[ -n "${GPU_GUARD_LOG:-}" ]]; then
+  guard_args+=(--log "$GPU_GUARD_LOG")
+fi
+exec python3 "$project_root/tools/gpu_guard.py" "${guard_args[@]}" -- \
+  "$redot_bin" --path "$project_root" "$@"

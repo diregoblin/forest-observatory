@@ -4,11 +4,15 @@ extends CanvasLayer
 signal rain_requested
 signal dam_requested
 signal pause_requested
+signal frame_limit_requested
+signal style_requested
 signal speed_requested(value: float)
 signal view_requested(index: int)
 signal season_requested
 signal save_requested
 signal load_requested
+signal soil_layers_requested
+signal options_toggled(open: bool)
 
 var info: Label
 var journal: Label
@@ -18,6 +22,8 @@ var plant_label: Label
 var rain_button: Button
 var dam_button: Button
 var pause_button: Button
+var frame_limit_button: Button
+var style_button: Button
 var season_button: Button
 var calendar_label: Label
 var speed_buttons: Dictionary = {}
@@ -28,122 +34,230 @@ var fungi_label: Label
 var notices: Array[String] = ["Исток питает ручей. Долина просыпается."]
 var observation_panel := ForestObservationPanel.new()
 var animal_label: Label
+var soil_layers := ForestSoilLayers.new()
+var options_overlay: Control
+var options_tabs: TabContainer
+var options_button: Button
+var view_selector: MenuButton
+var status_label: Label
+var toast: Label
+var toast_timer := Timer.new()
 
 
-func configure(settings: ForestSettings) -> void:
+func configure(settings: ForestSettings, animal_definitions: Array = []) -> void:
 	var root := Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
-	var top := MarginContainer.new()
-	top.add_theme_constant_override("margin_left", 38)
-	top.add_theme_constant_override("margin_top", 28)
-	root.add_child(top)
-	var box := VBoxContainer.new()
-	top.add_child(box)
-	_label(box, "ПОЛЕВАЯ СТАНЦИЯ   /   01", 14, Color(.85, .86, .68))
-	_label(box, "Тихая долина", 38, Color(.97, .96, .87))
-	_label(
-		box,
-		"Лесной водосбор · %d × %d м" % [settings.extent, settings.extent],
-		15,
-		Color(.85, .89, .82)
-	)
-	var panel := PanelContainer.new()
-	panel.position = Vector2(36, 156)
-	panel.custom_minimum_size = Vector2(268, 0)
-	root.add_child(panel)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(.055, .095, .08, .88)
-	style.set_corner_radius_all(7)
-	style.content_margin_left = 19
-	style.content_margin_right = 19
-	style.content_margin_top = 14
-	style.content_margin_bottom = 14
-	panel.add_theme_stylebox_override("panel", style)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 4)
-	panel.add_child(v)
-	_label(v, "НАБЛЮДЕНИЕ", 12, Color(.70, .76, .60))
-	info = _label(v, "", 15, Color(.93, .94, .83))
-	calendar_label = _label(v, "", 14, Color(.85, .89, .74))
-	weather_label = _label(v, "", 14, Color(.79, .84, .74))
-	plant_label = _label(v, "", 14, Color(.79, .84, .74))
-	fungi_label = _label(v, "", 14, Color(.89, .80, .61))
-	animal_label = _label(v, "", 14, Color(.86, .84, .71))
-	v.add_child(HSeparator.new())
-	var weather_controls := HBoxContainer.new()
-	v.add_child(weather_controls)
-	rain_button = _button(weather_controls, "Дождь · ВЫКЛ", func(): rain_requested.emit())
-	dam_button = _button(weather_controls, "Преграда · НЕТ", func(): dam_requested.emit())
-	pause_button = _button(v, "Пауза", func(): pause_requested.emit())
-	var speeds := HBoxContainer.new()
-	v.add_child(speeds)
+	var heading := VBoxContainer.new()
+	heading.position = Vector2(28, 22)
+	heading.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(heading)
+	_label(heading, "Тихая долина", 26, Color(.97, .96, .87))
+	status_label = _label(heading, "", 14, Color(.86, .89, .79))
+	options_button = _button(root, "Опции · Esc", func(): set_options_open(true))
+	options_button.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	options_button.offset_left = -180
+	options_button.offset_right = -28
+	options_button.offset_top = 26
+	options_button.offset_bottom = 62
+
+	var playback := PanelContainer.new()
+	root.add_child(playback)
+	playback.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	playback.offset_left = 28
+	playback.offset_top = -64
+	playback.offset_bottom = -24
+	playback.add_theme_stylebox_override("panel", _panel_style(8))
+	var bar := HBoxContainer.new()
+	bar.add_theme_constant_override("separation", 6)
+	playback.add_child(bar)
+	pause_button = _button(bar, "Пауза", func(): pause_requested.emit())
+	pause_button.custom_minimum_size.x = 104
+	pause_button.tooltip_text = "Пауза / продолжить · Пробел"
 	var speed_group := ButtonGroup.new()
-	for s in [1, 8, 60, 600]:
-		var b := _button(speeds, "×" + str(s), func(): speed_requested.emit(float(s)))
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.toggle_mode = true
-		b.button_group = speed_group
-		b.tooltip_text = "Общий темп воды, суток и года ×%d" % s
-		b.add_theme_color_override("font_pressed_color", Color(.97, .96, .87))
-		b.add_theme_color_override("font_hover_pressed_color", Color(.97, .96, .87))
-		var selected := StyleBoxFlat.new()
+	for speed in [1, 8, 60, 600]:
+		var button := _button(bar, "×" + str(speed), func(): speed_requested.emit(float(speed)))
+		button.toggle_mode = true
+		button.button_group = speed_group
+		button.tooltip_text = "Общий темп воды, суток и года ×%d" % speed
+		button.add_theme_color_override("font_pressed_color", Color(.97, .96, .87))
+		button.add_theme_color_override("font_hover_pressed_color", Color(.97, .96, .87))
+		var selected := _panel_style(4)
 		selected.bg_color = Color(.33, .43, .25, .95)
-		selected.set_corner_radius_all(4)
-		selected.content_margin_left = 10
-		selected.content_margin_right = 10
-		b.add_theme_stylebox_override("pressed", selected)
-		speed_buttons[float(s)] = b
-	var diagnostics := HBoxContainer.new()
-	v.add_child(diagnostics)
-	season_button = _button(diagnostics, "Сезоны · T", func(): season_requested.emit())
-	_button(diagnostics, "Вода · M", toggle_map)
-	_button(v, "Мицелий / питание · G", toggle_fungi_map)
-	v.add_child(HSeparator.new())
-	_label(v, "ТОЧКИ НАБЛЮДЕНИЯ", 12, Color(.70, .76, .60))
-	var views := GridContainer.new()
-	views.columns = 2
-	v.add_child(views)
-	for index in 5:
-		var labels := ["Над кронами", "У ручья", "У преграды", "Грибная поляна", "Заяц"]
-		_button(
-			views, "%d  %s" % [index + 1, labels[index]], func(): view_requested.emit(index + 1)
-		)
-	var saves := HBoxContainer.new()
-	v.add_child(saves)
-	_button(saves, "Сохранить · F5", func(): save_requested.emit())
-	_button(saves, "Загрузить · F9", func(): load_requested.emit())
-	var footer := Label.new()
-	footer.text = (
-		"ПКМ + WASD — полёт   ·   Q/E — высота   ·   Shift — быстрее"
-		+ "\nЛКМ — справка · R дождь · B преграда · T сезоны · M вода · G мицелий · F панель"
-	)
-	footer.add_theme_font_size_override("font_size", 14)
-	footer.add_theme_color_override("font_color", Color(.90, .92, .82))
-	footer.anchor_top = 1
-	footer.anchor_bottom = 1
-	footer.offset_left = 38
-	footer.offset_top = -55
-	footer.offset_bottom = -16
-	root.add_child(footer)
-	var right := VBoxContainer.new()
-	notes_container = right
-	right.anchor_left = 1
-	right.anchor_right = 1
-	right.offset_left = -390
-	right.offset_right = -38
-	right.offset_top = 42
-	right.custom_minimum_size = Vector2(340, 0)
-	root.add_child(right)
-	right.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_label(right, "ПОЛЕВЫЕ ЗАМЕТКИ", 12, Color(.85, .86, .68))
-	journal = _label(right, notices[0], 15, Color(.94, .94, .85))
-	journal.custom_minimum_size.x = 320
-	journal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		button.add_theme_stylebox_override("pressed", selected)
+		speed_buttons[float(speed)] = button
+	view_selector = MenuButton.new()
+	view_selector.text = "Точки наблюдения ▾"
+	view_selector.focus_mode = Control.FOCUS_ALL
+	view_selector.custom_minimum_size = Vector2(216, 30)
+	view_selector.add_theme_font_size_override("font_size", 15)
+	view_selector.add_theme_stylebox_override("normal", _panel_style(6))
+	bar.add_child(view_selector)
+	var labels := ["Над кронами", "У ручья", "У преграды", "Грибная поляна"]
+	for definition in animal_definitions:
+		labels.append(definition.get_meta(&"population_label", definition.display_name))
+	for index in labels.size():
+		view_selector.get_popup().add_item("%d · %s" % [index + 1, labels[index]], index + 1)
+	view_selector.get_popup().id_pressed.connect(func(id: int): view_requested.emit(id))
+	view_selector.tooltip_text = "Перейти к месту или животным · клавиши 1–9"
+
 	root.add_child(observation_panel)
+	observation_panel.offset_top = 82
+	_scene_note_overlay(root)
+	_build_options(root, settings)
+	root.add_child(soil_layers)
+	soil_layers.configure()
+	# A notification appears briefly, not as a permanent second sidebar.
+	toast = _label(root, "", 14, Color(.95, .94, .82))
+	toast.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	toast.offset_left = -468
+	toast.offset_right = -28
+	toast.offset_top = -130
+	toast.offset_bottom = -78
+	toast.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	toast.z_index = 101
+	toast.hide()
+	toast_timer.one_shot = true
+	toast_timer.wait_time = 7
+	toast_timer.timeout.connect(toast.hide)
+	add_child(toast_timer)
+
+
+func _panel_style(margin: int) -> StyleBoxFlat:
+	var panel := StyleBoxFlat.new()
+	panel.bg_color = Color(.055, .095, .08, .96)
+	panel.set_corner_radius_all(8)
+	panel.content_margin_left = margin
+	panel.content_margin_right = margin
+	panel.content_margin_top = margin
+	panel.content_margin_bottom = margin
+	return panel
+
+
+func _options_page(title: String) -> VBoxContainer:
+	var scroll := ScrollContainer.new()
+	scroll.name = title
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	options_tabs.add_child(scroll)
+	var content := VBoxContainer.new()
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.add_theme_constant_override("separation", 12)
+	scroll.add_child(content)
+	return content
+
+
+func _build_options(root: Control, settings: ForestSettings) -> void:
+	options_overlay = Control.new()
+	options_overlay.z_index = 100
+	root.add_child(options_overlay)
+	options_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var shade := ColorRect.new()
+	shade.color = Color(.015, .025, .02, .65)
+	options_overlay.add_child(shade)
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var panel := PanelContainer.new()
+	options_overlay.add_child(panel)
+	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	panel.offset_left = -350
+	panel.offset_right = 350
+	panel.offset_top = -292
+	panel.offset_bottom = 292
+	panel.add_theme_stylebox_override("panel", _panel_style(22))
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 16)
+	panel.add_child(content)
+	var header := HBoxContainer.new()
+	content.add_child(header)
+	var title := _label(header, "Опции", 26, Color(.97, .96, .87))
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_button(header, "Вернуться в лес · Esc", func(): set_options_open(false))
+	options_tabs = TabContainer.new()
+	options_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	options_tabs.add_theme_font_size_override("font_size", 16)
+	options_tabs.add_theme_stylebox_override("panel", _panel_style(16))
+	content.add_child(options_tabs)
+	var graphics := _options_page("Вид")
+	_label(graphics, "ОТРИСОВКА", 12, Color(.70, .76, .60))
+	style_button = _button(graphics, "Вид · Пиксельный · F8", func(): style_requested.emit())
+	frame_limit_button = _button(graphics, "Графика · 60 FPS", func(): frame_limit_requested.emit())
+	frame_limit_button.tooltip_text = (
+		"Лимит 30 / 60 кадров в секунду. 30 FPS могут снизить нагрузку на видеокарту."
+		+ "\nПри нехватке производительности фактический темп мира может быть ниже выбранного."
+	)
+	_label(graphics, "F — скрыть или вернуть весь интерфейс", 15, Color(.79, .84, .74))
+
+	var world := _options_page("Мир")
+	_label(world, "ЭКСПЕРИМЕНТЫ", 12, Color(.70, .76, .60))
+	rain_button = _button(world, "Дождь · ВЫКЛ", func(): rain_requested.emit())
+	rain_button.tooltip_text = (
+		"Изменить осадки до следующего погодного фронта." + " Затем вернётся динамическая погода."
+	)
+	dam_button = _button(world, "Преграда · НЕТ", func(): dam_requested.emit())
+	season_button = _button(world, "Сезоны · T", func(): season_requested.emit())
+	world.add_child(HSeparator.new())
+	_label(world, "СОСТОЯНИЕ МИРА", 12, Color(.70, .76, .60))
+	_button(world, "Сохранить · F5", func(): save_requested.emit())
+	_button(world, "Загрузить · F9", func(): load_requested.emit())
+
+	var data := _options_page("Наблюдения")
+	var maps := HBoxContainer.new()
+	data.add_child(maps)
+	_button(maps, "Вода · M", func(): _show_layer(toggle_map))
+	_button(maps, "Мицелий · G", func(): _show_layer(toggle_fungi_map))
+	_button(maps, "Почва · V", func(): _show_layer(func(): soil_layers_requested.emit()))
+	_label(
+		data,
+		"ЛЕСНОЙ ВОДОСБОР · %d × %d м" % [settings.extent, settings.extent],
+		12,
+		Color(.70, .76, .60)
+	)
+	calendar_label = _label(data, "", 15, Color(.85, .89, .74))
+	weather_label = _label(data, "", 15, Color(.79, .84, .74))
+	info = _label(data, "", 15, Color(.93, .94, .83))
+	plant_label = _label(data, "", 15, Color(.79, .84, .74))
+	fungi_label = _label(data, "", 15, Color(.89, .80, .61))
+	animal_label = _label(data, "", 15, Color(.86, .84, .71))
+	data.add_child(HSeparator.new())
+	notes_container = VBoxContainer.new()
+	data.add_child(notes_container)
+	_label(notes_container, "ПОЛЕВЫЕ ЗАМЕТКИ", 12, Color(.85, .86, .68))
+	journal = _label(notes_container, notices[0], 15, Color(.94, .94, .85))
+	journal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+	var help := _options_page("Управление")
+	_label(help, "КАМЕРА", 12, Color(.70, .76, .60))
+	_label(
+		help,
+		"ПКМ + WASD — полёт · Q / E — высота\nShift — быстрее · 1–9 — точки наблюдения",
+		16,
+		Color(.93, .94, .83)
+	)
+	_label(
+		help,
+		"ЛКМ — карточка растения, гриба или животного\nC — следовать за выбранным животным",
+		16,
+		Color(.93, .94, .83)
+	)
+	help.add_child(HSeparator.new())
+	_label(
+		help,
+		(
+			"Пробел — пауза · R — дождь · B — преграда"
+			+ "\nT — просмотр сезонов · M — вода · G — мицелий · V — почва"
+			+ "\nF5 — сохранить · F9 — загрузить · F8 — стиль"
+			+ "\nF — интерфейс · Esc — опции / вернуться в лес"
+		),
+		16,
+		Color(.85, .89, .74)
+	)
+	options_overlay.hide()
+
+
+func _scene_note_overlay(root: Control) -> void:
 	observation_panel.close_requested.connect(func(): observation_panel.show_record({}))
-	hydro_map.position = Vector2(-296, 340)
+	hydro_map.position = Vector2(-296, 180)
 	hydro_map.anchor_left = 1
 	hydro_map.anchor_right = 1
 	hydro_map.size = Vector2(256, 256)
@@ -154,16 +268,44 @@ func configure(settings: ForestSettings) -> void:
 	map_legend = _label(
 		root,
 		(
-			"ГРУНТОВАЯ ВОДА · север ↑\nКоричневый → голубой: запас 0–100%"
+			"ГРУНТОВАЯ ВОДА · M · север ↑"
+			+ "\nЗапас 0–100%: коричневый → голубой"
 			+ "\nСиний: поверхность · жёлтый: выход воды"
 		),
 		13,
 		Color(.94, .94, .85)
 	)
-	map_legend.position = Vector2(-360, 610)
+	map_legend.position = Vector2(-360, 450)
 	map_legend.anchor_left = 1
 	map_legend.anchor_right = 1
 	map_legend.visible = false
+
+
+func set_options_open(open: bool) -> void:
+	if open:
+		visible = true
+	options_overlay.visible = open
+	options_toggled.emit(open)
+	if not open:
+		get_viewport().gui_release_focus()
+
+
+func _show_layer(callback: Callable) -> void:
+	set_options_open(false)
+	callback.call()
+
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.physical_keycode == KEY_ESCAPE:
+			set_options_open(not options_overlay.visible)
+			get_viewport().set_input_as_handled()
+
+
+func _unhandled_input(_event: InputEvent) -> void:
+	# Keep menu keys / pointer input away from world picking and free flight.
+	if visible and options_overlay.visible:
+		get_viewport().set_input_as_handled()
 
 
 func _label(parent: Node, s: String, size: int, c: Color) -> Label:
@@ -239,6 +381,16 @@ func refresh(
 			% [trees.alive.count(1), trees.land.settings.plants.size()]
 		)
 	if not climate.is_empty():
+		status_label.text = (
+			"%s · %s%s\n%s · %.0f °C"
+			% [
+				climate.date,
+				climate.time,
+				" · ПРОСМОТР" if preview else "",
+				climate.get("weather_title", climate.season),
+				climate.temperature_c
+			]
+		)
 		calendar_label.text = (
 			"Год %d · %s · %s\n%s · %.0f °C · свет %.1f ч\nСутки %s · год %s%s"
 			% [
@@ -260,6 +412,10 @@ func refresh(
 				% [water.config.day_speed_multiplier, water.config.year_speed_multiplier]
 			)
 		)
+		calendar_label.text += (
+			"\n%s · ветер %.1f м/с"
+			% [climate.get("weather_title", "Просмотр сезона"), climate.get("wind_m_s", 0.0)]
+		)
 		season_button.text = "К расчёту · T" if preview else "Сезоны · T"
 	hydro_map.refresh(water)
 
@@ -272,6 +428,8 @@ func _duration(seconds: float) -> String:
 
 
 func toggle_map() -> void:
+	if soil_layers.visible:
+		soil_layers_requested.emit()
 	hydro_map.visible = not hydro_map.visible
 	map_legend.visible = hydro_map.visible
 	if hydro_map.visible:
@@ -284,6 +442,8 @@ func configure_fungi(fungi: ForestFungi) -> void:
 
 
 func toggle_fungi_map() -> void:
+	if soil_layers.visible:
+		soil_layers_requested.emit()
 	fungi_map.visible = not fungi_map.visible
 	if fungi_map.visible:
 		hydro_map.visible = false
@@ -312,3 +472,7 @@ func notice(s: String) -> void:
 		notices.resize(3)
 	if journal:
 		journal.text = "\n\n".join(notices)
+	if toast:
+		toast.text = s
+		toast.show()
+		toast_timer.start()

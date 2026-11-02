@@ -15,8 +15,19 @@ func _init(landscape: ForestLandscape) -> void:
 	land = landscape
 
 
-func register_group(kind: StringName, model: RefCounted, shape: Callable) -> void:
-	groups[kind] = {"model": model, "shape": shape}
+func register_group(
+	kind: StringName,
+	model: RefCounted,
+	shape: Callable,
+	visible_ids := Callable(),
+	display_shape := Callable()
+) -> void:
+	groups[kind] = {
+		"model": model,
+		"shape": shape,
+		"visible_ids": visible_ids,
+		"display_shape": display_shape if display_shape.is_valid() else shape
+	}
 
 
 func rebuild() -> void:
@@ -24,7 +35,12 @@ func rebuild() -> void:
 	records.clear()
 	for kind in groups:
 		var group: Dictionary = groups[kind]
-		for id in group.model.positions.size():
+		var ids: Variant = (
+			group.visible_ids.call()
+			if group.visible_ids.is_valid()
+			else range(group.model.positions.size())
+		)
+		for id in ids:
 			var shape: Dictionary = group.shape.call(id)
 			if shape.is_empty():
 				continue
@@ -107,7 +123,11 @@ func describe() -> Dictionary:
 		selected.clear()
 		return {}
 	var model = groups[selected.kind].model
-	if selected.id < 0 or selected.id >= model.positions.size():
+	if (
+		selected.id < 0
+		or selected.id >= model.positions.size()
+		or groups[selected.kind].display_shape.call(selected.id).is_empty()
+	):
 		selected.clear()
 		return {}
 	var result: Dictionary = model.inspect(selected.id).duplicate(true)
@@ -120,7 +140,7 @@ func describe() -> Dictionary:
 func bounds() -> AABB:
 	if selected.is_empty() or not valid_selection(selected):
 		return AABB()
-	var shape: Dictionary = groups[selected.kind].shape.call(selected.id)
+	var shape: Dictionary = groups[selected.kind].display_shape.call(selected.id)
 	return shape.get("bounds", AABB())
 
 
@@ -150,6 +170,15 @@ static func _shape_distance(
 	var box: AABB = shape.bounds
 	if box.intersects_ray(origin, direction) == null:
 		return -1.0
+	if shape.has("parts"):
+		var closest_part := maximum
+		var found_part := false
+		for part in shape.parts:
+			var distance := _shape_distance(part, origin, direction, closest_part)
+			if distance >= 0 and distance < closest_part:
+				closest_part = distance
+				found_part = true
+		return closest_part if found_part else -1.0
 	var transform: Transform3D = shape.transform
 	var inverse := transform.affine_inverse()
 	var local_origin := inverse * origin
@@ -169,8 +198,30 @@ static func _shape_distance(
 			local_origin, local_direction, vertices[j], vertices[j + 1], vertices[j + 2]
 		)
 		if point is Vector3:
+			var triangle_accept: Callable = shape.get("accept_triangle_hit", Callable())
+			if triangle_accept.is_valid():
+				var uvs: PackedVector3Array = shape.uvs
+				var bary := _barycentric(point, vertices[j], vertices[j + 1], vertices[j + 2])
+				var value: Vector3 = uvs[j] * bary.x + uvs[j + 1] * bary.y + uvs[j + 2] * bary.z
+				if not triangle_accept.call(Vector2(value.x, value.y), value.z > .5):
+					continue
+			var accept: Callable = shape.get("accept_hit", Callable())
+			if accept.is_valid() and not accept.call(point):
+				continue
 			var distance := origin.distance_to(transform * point)
 			if distance < closest:
 				closest = distance
 				found = true
 	return closest if found else -1.0
+
+
+static func _barycentric(p: Vector3, a: Vector3, b: Vector3, c: Vector3) -> Vector3:
+	var v0 := b - a
+	var v1 := c - a
+	var v2 := p - a
+	var denom := v0.dot(v0) * v1.dot(v1) - v0.dot(v1) * v0.dot(v1)
+	if absf(denom) < .000000000001:
+		return Vector3(1, 0, 0)
+	var y := (v1.dot(v1) * v2.dot(v0) - v0.dot(v1) * v2.dot(v1)) / denom
+	var z := (v0.dot(v0) * v2.dot(v1) - v0.dot(v1) * v2.dot(v0)) / denom
+	return Vector3(1 - y - z, y, z)

@@ -12,7 +12,7 @@ class ForestFungiNative : public RefCounted {
         GET(diffusion_b_m2_s); GET(diffusion_r_m2_s); GET(uptake_m4_kg2_s);
         GET(mortality_s); GET(replenishment_s); GET(resource_capacity_kg_m2);
         GET(yield); GET(fruiting_s); GET(fruit_lifetime_s); GET(fruit_threshold_kg_m2);
-        GET(max_step_s); GET(finite_litter);
+        GET(max_step_s); GET(finite_litter); GET(ectomycorrhizal);
 #undef GET
         return p;
     }
@@ -26,6 +26,7 @@ protected:
         ClassDB::bind_method(D_METHOD("metrics"),&ForestFungiNative::metrics);
         ClassDB::bind_method(D_METHOD("snapshot"),&ForestFungiNative::snapshot);
         ClassDB::bind_method(D_METHOD("restore","state"),&ForestFungiNative::restore);
+        ClassDB::bind_method(D_METHOD("trade","position","nitrogen","phosphorus","carbon","radius"),&ForestFungiNative::trade);
     }
 public:
     bool configure(int n,double dx,const Dictionary &options,const PackedFloat64Array &b,
@@ -38,6 +39,10 @@ public:
         if(soil.is_null()||!core.bind_soil(&soil->core,patch,reset))return false;soil_owner=soil;return true;
     }
     bool advance(double seconds) {return core.advance(seconds);}
+    PackedFloat64Array trade(Vector3 position,double nitrogen,double phosphorus,double carbon,double radius) {
+        const auto exchanged=core.trade(position.x,position.z,nitrogen,phosphorus,carbon,radius);
+        return pack({exchanged.c,exchanged.n,exchanged.p});
+    }
     bool set_environment(const PackedFloat64Array &soil,const PackedFloat64Array &depth,
             int water_n,double water_dx,double ox,double oz,double temperature) {
         if(core.n==0 || water_n<1 || soil.size()!=water_n*water_n || depth.size()!=soil.size()

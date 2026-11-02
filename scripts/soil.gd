@@ -18,14 +18,53 @@ func _init(water: ForestWatershed) -> void:
 		Vector3(.05, .0025, .0002)
 	)
 	assert(ok)
+	var noise := FastNoiseLite.new()
+	noise.seed = land.settings.seed + 887
+	noise.frequency = .018
+	var organic := PackedFloat64Array()
+	var minerals := PackedFloat64Array()
+	var surface := PackedFloat64Array()
+	for z in water.resolution:
+		for x in water.resolution:
+			var px := (x + .5) * water.cell_size
+			var pz := (z + .5) * water.cell_size
+			var slope := (
+				(
+					Vector2(
+						land.height_at(px + 2, pz) - land.height_at(px - 2, pz),
+						land.height_at(px, pz + 2) - land.height_at(px, pz - 2)
+					)
+					. length()
+				)
+				/ 4
+			)
+			var bank := exp(-absf(px - land.channel_x(pz)) / 25.0)
+			var patch := noise.get_noise_2d(px, pz)
+			var site := land.habitat_at(px, pz)
+			organic.append(
+				(
+					maxf(.08, (1.0 + patch * 1.4 + .7 * bank) / (1 + 2.5 * slope))
+					* lerpf(1.0, .18, site.w)
+				)
+			)
+			minerals.append(.7 + bank * 1.2 + .3 * (1 - patch))
+			surface.append(
+				(
+					clampf(.07 + .06 * patch - .08 * slope - .05 * bank, .003, .16)
+					* (.03 + .97 * site.x)
+				)
+			)
+	assert(native.initialize_pattern(organic, minerals, surface))
 
 
-func step(dt: float, water: ForestWatershed) -> void:
+func step(dt: float, water: ForestWatershed, forcing: Dictionary = {}) -> void:
 	var climate := ForestClimate.sample(
 		float(native.metrics().elapsed_s) + dt * .5,
 		land.settings.start_day,
 		land.settings.latitude_deg
 	)
+	if not forcing.is_empty():
+		climate = forcing
 	var ok := native.advance(dt, water.soil, climate.temperature_c)
 	assert(ok)
 

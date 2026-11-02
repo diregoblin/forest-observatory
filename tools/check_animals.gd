@@ -9,6 +9,8 @@ class Food:
 	var positions := PackedVector3Array()
 	var species := PackedInt32Array([0])
 	var alive := PackedByteArray([1])
+	var fallen := PackedByteArray([0])
+	var fruit_c := PackedFloat64Array([0])
 	var size := PackedFloat64Array([1])
 	var biomass_c := PackedFloat64Array([8])
 	var biomass_n := PackedFloat64Array([.2])
@@ -64,9 +66,14 @@ func chamber(food := true, flooding := false, extra_species := false) -> Diction
 	var water := Water.new()
 	water.depth[0] = 1 if flooding else 0
 	var soil := Soil.new()
-	var definitions: Array = [HARE]
+	var solo: ForestAnimalDefinition = HARE.duplicate(true)
+	solo.initial_count = 1
+	solo.initial_elements = Vector3(1.2, .12, .012)
+	solo.reproduction_enabled = false
+	solo.sleep_duration_h = 0  # This legacy chamber isolates feeding/routines, not solar sleep.
+	var definitions: Array = [solo]
 	if extra_species:
-		var other: ForestAnimalDefinition = HARE.duplicate(true)
+		var other: ForestAnimalDefinition = solo.duplicate(true)
 		other.species_id = &"resource_only_herbivore"
 		definitions.append(other)
 	var animals := ForestAnimals.new(land, plants, water, soil, definitions)
@@ -88,6 +95,8 @@ func _initialize() -> void:
 
 func _run() -> void:
 	_check_depleted_food()
+	_check_distinctions()
+	_check_routines()
 	var fed := chamber()
 	var starved := chamber(false)
 	var flood := chamber(true, true)
@@ -116,6 +125,8 @@ func _run() -> void:
 		assert(distance <= HARE.maximum_segment_m + 5e-5)
 		path_distance += distance
 	assert(path_distance > 0 and fed.animals.consumed_cnp.x > 0)
+	assert(absf(fed.animals.life_records[0].distance_m - path_distance) < 1e-6)
+	assert(absf(fed.animals.life_records[0].consumed_c_kg - (8 - fed.plants.biomass_c[0])) < 1e-6)
 	assert(fed.plants.biomass_c[0] < 8, "Food actually loses mass, no decorative feeding")
 	assert((total(fed) - initial).length() < 3e-6)
 	var frozen: Dictionary = fed.animals.snapshot()
@@ -189,7 +200,11 @@ func _run() -> void:
 		"local_sensing_only": true,
 		"near_depleted_food_not_selected": true,
 		"edible_threshold_resource_driven": true,
-		"reproduction_implemented": false,
+		"personal_cosmetic_distinctions": true,
+		"distinctions_do_not_change_trajectory": true,
+		"older_behavior_version_rejected": true,
+		"leaves_stocked_food_explores_surveys_and_rests": true,
+		"reproduction_implemented": true,
 		"boundary":
 		"Controlled food/soil/water doubles; scenario metabolism and movement, not validated physiology"
 	}
@@ -198,6 +213,72 @@ func _run() -> void:
 	file.store_string(JSON.stringify(report, "  "))
 	print("ANIMALS_CHECK ", JSON.stringify(report))
 	quit()
+
+
+func _check_distinctions() -> void:
+	var world := chamber(true, false, true)
+	var control := chamber(true, false, true)
+	for candidate in [world, control]:
+		candidate.animals.positions[1] += Vector3(120, 0, 0)
+	for id in 2:
+		assert(world.animals.inspect(id).distinctions.is_empty(), "Starting age earns no title")
+	for day in 35:
+		world.animals.step(ForestClimate.DAY_S)
+		control.animals.step(ForestClimate.DAY_S)
+		for id in 2:
+			control.animals.life_records[id] = control.animals._empty_life_record()
+	var observed: Dictionary = world.animals.snapshot()
+	var without_records := observed.duplicate(true)
+	var control_state: Dictionary = control.animals.snapshot()
+	without_records.erase("life_records")
+	control_state.erase("life_records")
+	assert(
+		(
+			without_records == control_state
+			and world.plants.element_totals() == control.plants.element_totals()
+		),
+		"Cosmetic records cannot change decisions, RNG, food or physiology"
+	)
+	assert(world.animals.life_records[0].consumed_c_kg > .75)
+	assert(world.animals.life_records[1].consumed_c_kg == 0, "No credit for another animal's meals")
+	var titles: Array[String] = []
+	for distinction in world.animals.inspect(0).distinctions:
+		titles.append(distinction.title)
+	assert("Гроза подлеска" in titles and "Местная легенда" in titles)
+	assert(world.animals.inspect(1).distinctions.size() < titles.size())
+	assert(world.animals.snapshot() == observed, "Reading a profile cannot advance title counters")
+	# Definition-derived boundary fixtures, separate from the executed-life control above.
+	var fixture := chamber()
+	for rule in ForestAnimals.DISTINCTIONS:
+		fixture.animals.life_records[0] = fixture.animals._empty_life_record()
+		fixture.animals.life_records[0][rule.metric] = float(rule.minimum) - .001
+		assert(fixture.animals.inspect(0).distinctions.is_empty())
+		fixture.animals.life_records[0][rule.metric] = float(rule.minimum)
+		assert(
+			(
+				fixture.animals.inspect(0).distinctions
+				== [{"title": rule.title, "reason": rule.reason}]
+			)
+		)
+	var panel := ForestObservationPanel.new()
+	root.add_child(panel)
+	panel.show_record(world.animals.inspect(0))
+	assert(panel.distinctions.visible and "Гроза подлеска" in panel.distinctions.text)
+	panel.show_record({"title": "Растение", "kind": &"plant"})
+	assert(
+		not panel.distinctions.visible and panel.distinctions.text.is_empty(),
+		"No stale title on another profile"
+	)
+	panel.free()
+	var resumed := chamber(true, false, true)
+	assert(resumed.animals.restore(observed) and resumed.animals.snapshot() == observed)
+	assert(resumed.animals.inspect(0).distinctions == world.animals.inspect(0).distinctions)
+	var legacy := observed.duplicate(true)
+	legacy.version = 1
+	legacy.erase("life_records")
+	assert(
+		not resumed.animals.restore(legacy), "Old behavior versions are deliberately incompatible"
+	)
 
 
 func _check_depleted_food() -> void:
@@ -240,7 +321,7 @@ func _check_continuation(original: Dictionary) -> void:
 
 func _check_restore_rejects(world: Dictionary) -> void:
 	var before: Dictionary = world.animals.snapshot()
-	for mode in 7:
+	for mode in 13:
 		var corrupt := before.duplicate(true)
 		match mode:
 			0:
@@ -257,4 +338,35 @@ func _check_restore_rejects(world: Dictionary) -> void:
 				corrupt.energy_kj[0] += 100
 			6:
 				corrupt.path_history[0].points[1] += Vector3(4, 0, 0)
+			7:
+				corrupt.life_records[0].consumed_c_kg = -1.0
+			8:
+				corrupt.life_records[0].rested_s = NAN
+			9:
+				corrupt.life_records[0].lived_s = corrupt.elapsed_s + 1
+			10:
+				corrupt.life_records[0].rested_s = corrupt.life_records[0].lived_s + 1
+			11:
+				corrupt.life_records[0].consumed_c_kg = corrupt.consumed_totals[0] + 1
+			12:
+				corrupt.life_records[0].distance_m = corrupt.total_distance_m + 1
 		assert(not world.animals.restore(corrupt) and world.animals.snapshot() == before)
+
+
+func _check_routines() -> void:
+	var w := chamber()
+	var initial := total(w)
+	var seen := {}
+	var furthest := 0.0
+	for substep in 12 * 96:
+		w.animals.step(900)
+		seen[w.animals.actions[0]] = true
+		furthest = maxf(furthest, w.animals.positions[0].distance_to(w.plants.positions[0]))
+	assert(w.animals.alive[0], "New routines still permit a fed hare to survive")
+	for action in ["eat", "explore", "survey", "shelter"]:
+		assert(seen.has(action), "Real observed routine: " + action)
+	assert(
+		furthest > 2 and w.animals.life_records[0].rested_s > 0,
+		"Leaves a still-stocked food source and rests"
+	)
+	assert((total(w) - initial).length() < 2e-5, "Routines do not create food or bypass metabolism")

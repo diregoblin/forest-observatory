@@ -1,8 +1,9 @@
-[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=9 format=3]
+[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/plant_definition.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/plant_module.gd" id="2"]
 
+[ext_resource type="Texture2D" path="res://art/canopy/oval.png" id="canopy"]
 [sub_resource type="CylinderMesh" id="TwigMesh"]
 top_radius = 0.004
 bottom_radius = 0.012
@@ -43,6 +44,7 @@ scale_step = Vector3(0, -0.0008, 0)
 color = Color(0.2, 0.34, 0.12, 1)
 [sub_resource type="Resource" id="Berries"]
 script = ExtResource("2")
+component_kind = &"fruit"
 mesh = SubResource("BerryMesh")
 count = 7
 offset = Vector3(0, 0.16, 0)
@@ -90,3 +92,18 @@ stress_days = 14.0
 recovery_days = 7.0
 lifespan_years = 25.0
 modules = Array[ExtResource("2")]([SubResource("Twigs"), SubResource("Leaves"), SubResource("Berries")])
+mycorrhiza_type = &"ericoid"
+
+fruit_bearing = true
+insect_pollinated = true
+flower_start_day = 135.0
+fruit_start_day = 200.0
+
+initial_habitat_weights = Vector4(2, 0.25, 0.02, 0.04)
+
+canopy_texture = ExtResource("canopy")
+canopy_layers = 4
+canopy_leaf_span_m = 0.045
+canopy_color = Color(0.38,0.49,0.37,1)
+branch_radius_m = 0.005
+branch_droop = 0.08

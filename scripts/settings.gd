@@ -23,10 +23,11 @@ extends Resource
 @export var dam_height := 2.7
 @export var tree_attempts := 4600
 @export var grass_attempts := 22000
+@export_range(0.0, 1.0) var initial_fallen_fraction := 0.0  # Fraction of placed trees, not herbs.
 @export var ecology_interval := 86400.0  # Groundcover interval in biological seconds.
 @export var initial_speed := 1.0  # Shared requested water seconds per wall second.
-@export var day_speed_multiplier := 1440.0  # Solar seconds per hydrological second.
-@export var year_speed_multiplier := 52560.0  # Biological seconds per hydrological second.
+@export var day_speed_multiplier := 360.0  # Solar seconds per hydrological second.
+@export var year_speed_multiplier := 13140.0  # Biological seconds per hydrological second.
 @export var ecology_step_s := 0.5  # Shared fixed tick in hydrological SI seconds.
 @export var start_day := 135.0  # 15 May of a 365-day scenario year.
 @export var start_hour := 12.0
@@ -37,6 +38,7 @@ extends Resource
 @export var flood_biomass := .03
 @export var growth_per_tick := .018
 @export var fungus: ForestFungusDefinition = preload("res://data/fungi/fairy_ring.tres")
+@export var fungal_species: Array[Resource] = []
 @export var fungi_resolution := 128
 @export var fungi_cell_m := .25
 @export var fungi_plot_centers := PackedVector2Array(
@@ -48,6 +50,13 @@ extends Resource
 
 func validate() -> void:
 	assert(extent > 0 and terrain_resolution > 0 and water_resolution > 1)
+	assert(
+		(
+			is_finite(initial_fallen_fraction)
+			and initial_fallen_fraction >= 0
+			and initial_fallen_fraction <= 1
+		)
+	)
 	assert(water_step > 0 and water_step <= 5)
 	assert(water_cfl > 0 and water_cfl <= .5 and manning_n > 0)
 	assert(water_theta >= 0 and water_theta <= 1 and max_froude > 0)
@@ -66,6 +75,9 @@ func validate() -> void:
 	assert(dam_fraction > 0 and dam_fraction < 1 and dam_width > 0)
 	assert(not plants.is_empty())
 	fungus.validate()
+	for definition in fungal_species:
+		assert(definition is ForestFungusDefinition)
+		definition.validate()
 	assert(fungi_resolution >= 16 and fungi_resolution <= 512 and fungi_cell_m > 0)
 	assert(fungi_resolution * fungi_cell_m <= extent and fungi_initial_age_s >= 0)
 	assert(not fungi_plot_centers.is_empty())
@@ -81,6 +93,10 @@ func validate() -> void:
 
 func day_water_s() -> float:
 	return ForestClimate.DAY_S / day_speed_multiplier
+
+
+func fungus_for_plot(index: int) -> ForestFungusDefinition:
+	return fungus if fungal_species.is_empty() else fungal_species[index % fungal_species.size()]
 
 
 func year_water_s() -> float:

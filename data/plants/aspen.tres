@@ -1,8 +1,9 @@
-[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=9 format=3]
+[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/plant_definition.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/plant_module.gd" id="2"]
 
+[ext_resource type="Texture2D" path="res://art/canopy/round.png" id="canopy"]
 [sub_resource type="CylinderMesh" id="TrunkMesh"]
 top_radius = 0.08
 bottom_radius = 0.22
@@ -25,6 +26,7 @@ offset = Vector3(0, 5.5, 0)
 color = Color(0.72, 0.74, 0.64, 1)
 [sub_resource type="Resource" id="Branches"]
 script = ExtResource("2")
+component_kind = &"branch"
 mesh = SubResource("BranchMesh")
 count = 6
 offset = Vector3(0, 7, 0)
@@ -82,3 +84,13 @@ stress_days = 14.0
 recovery_days = 8.0
 lifespan_years = 90.0
 modules = Array[ExtResource("2")]([SubResource("Trunk"), SubResource("Branches"), SubResource("Crown")])
+mycorrhiza_type = &"ecto"
+
+initial_habitat_weights = Vector4(1, 0.003, 0.02, 0.001)
+
+canopy_texture = ExtResource("canopy")
+canopy_layers = 4
+canopy_leaf_span_m = 0.13
+canopy_color = Color(0.43,0.53,0.39,1)
+branch_radius_m = 0.11
+branch_droop = 0.1

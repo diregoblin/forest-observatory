@@ -17,14 +17,34 @@ extends Resource
 @export var edible_fraction := 0.0
 @export var mature_age_years := 8.0
 @export var seed_cost_kg_c := 0.002
+@export var flower_start_day := 135.0
+@export var flower_duration_days := 24.0
+@export var insect_pollinated := false
+@export var fruit_bearing := false
+@export var fruit_start_day := 220.0
+@export var fruit_duration_days := 65.0
 @export var reproduction_per_year := 0.2
 @export var dispersal_m := 8.0
 @export var germination_fraction := .12
+@export_range(0, 1) var nurse_log_affinity := 0.0
+@export_range(0, 1) var snow_retention := .25
+@export_range(0, 1) var trampling_resistance := .3
 @export var recruitment_light := .15
 @export var weight := 1.0
+# Initial community affinities: forest / clearing / wet meadow / sandy shore.
+# Scenario placement only, not a runtime survival gate or a calibrated niche.
+@export var initial_habitat_weights := Vector4(1, 1, 1, 1)
 @export var scale_range := Vector2(.72, 1.5)
 @export var minimum_channel_distance := 14.0
 @export var wind_strength := .015
+# Presentation traits only; no extra biomass, RNG consumption or save state.
+@export var canopy_texture: Texture2D
+@export var canopy_leaf_span_m := .12
+@export var canopy_color := Color(.40, .49, .43)
+@export_range(0, 4) var canopy_layers := 0
+@export_range(0, 1) var bark_markings := 0.0
+@export var branch_radius_m := 0.0
+@export_range(0, 1) var branch_droop := .1
 @export var modules: Array[ForestPlantModule] = []
 @export var deciduous := false
 @export var leaf_on_day := 110.0
@@ -42,10 +62,33 @@ extends Resource
 @export var recovery_days := 8.0
 @export var lethal_stress := 0.95
 @export var lifespan_years := 200.0
+@export var leaf_mass_fraction := .04  # Subset of live biomass, not another carbon owner.
+@export var mycorrhiza_type: StringName = &"none"
+@export var propagule_kind: StringName = &"seed"
 
 
 func validate() -> void:
+	for module in modules:
+		assert(module.mesh != null and module.count > 0 and module.whorls > 0)
+		assert(module.leaf_count >= 0 and module.leaflet_pairs >= 0)
+		assert(module.leaf_size.x > 0 and module.leaf_size.y > 0)
+		assert(module.bend.is_finite() and module.tip_offset.is_finite())
+		assert(module.shape != "shoot" or module.mesh is CylinderMesh)
+	assert(canopy_leaf_span_m > 0 and canopy_layers >= 0 and canopy_layers <= 4)
+	assert(branch_radius_m >= 0 and branch_droop >= 0 and branch_droop <= 1)
+	assert(canopy_layers == 0 or canopy_texture != null)
+	assert(initial_habitat_weights.is_finite())
+	for affinity in 4:
+		assert(initial_habitat_weights[affinity] >= 0)
+	assert(nurse_log_affinity >= 0 and nurse_log_affinity <= 1)
+	assert(snow_retention >= 0 and snow_retention <= 1)
+	assert(trampling_resistance >= 0 and trampling_resistance <= 1)
+	assert(flower_start_day >= 1 and flower_start_day <= 365 and flower_duration_days > 0)
+	assert(fruit_start_day >= 1 and fruit_start_day <= 365 and fruit_duration_days > 0)
 	assert(growth_form in [&"tree", &"shrub", &"dwarf_shrub", &"herb", &"grass"])
+	assert(leaf_mass_fraction >= 0 and leaf_mass_fraction <= .7)
+	assert(mycorrhiza_type in [&"none", &"ecto", &"arbuscular", &"ericoid"])
+	assert(propagule_kind in [&"seed", &"spore"])
 	assert(life_cycle in [&"annual", &"biennial", &"perennial"])
 	assert(initial_age_years.x >= 0 and initial_age_years.y >= initial_age_years.x)
 	assert(biomass_kg_c > 0 and cn_ratio > 0 and cp_ratio > 0)

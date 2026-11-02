@@ -19,6 +19,7 @@ struct FungalParameters {
     double fruit_threshold_kg_m2 = .005;
     double max_step_s = .2*30*86400.0;
     bool finite_litter = true;
+    bool ectomycorrhizal = false;
     bool valid() const;
 };
 class Fungi {
@@ -42,6 +43,7 @@ public:
     double balance_error_kg() const;
     bool finite_state() const;
     double edge_biomass_kg() const;
+    Elements trade(double x,double z,double requested_n,double requested_p,double offered_c,double radius);
 private:
     std::vector<double> next_b, next_r;
     void step(double dt);

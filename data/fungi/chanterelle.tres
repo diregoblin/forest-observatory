@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ForestFungusDefinition" load_steps=2 format=3]
+[ext_resource type="Script" path="res://scripts/fungus_definition.gd" id="1"]
+[resource]
+script = ExtResource("1")
+species_id = &"cantharellus_cibarius"
+display_name = "Лисичка обыкновенная"
+latin_name = "Cantharellus cibarius"
+trophic_type = &"ectomycorrhizal"
+source_url = "https://www.first-nature.com/fungi/cantharellus-cibarius.php"
+cap_profile = &"funnel"
+cap_radius_m = 0.08
+stem_radius_m = 0.023
+stem_height_m = 0.10
+cap_height_ratio = 0.55
+cap_color = Color(0.93, 0.59, 0.09, 1)
+stem_color = Color(0.88, 0.56, 0.11, 1)
+representative_body_kg = 0.000035
+fruit_lifetime_s = 1814400.0

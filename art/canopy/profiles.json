@@ -1,0 +1,78 @@
+{
+  "pointed": {
+    "shape": "serrated",
+    "groups": 34,
+    "width": 30,
+    "length": 37,
+    "seed": 0
+  },
+  "lobed": {
+    "shape": "lobed",
+    "groups": 24,
+    "width": 32,
+    "length": 59,
+    "seed": 0
+  },
+  "heart": {
+    "shape": "heart",
+    "groups": 30,
+    "width": 36,
+    "length": 43,
+    "seed": 2
+  },
+  "round": {
+    "shape": "round",
+    "groups": 33,
+    "width": 32,
+    "length": 37,
+    "seed": 3
+  },
+  "palmate": {
+    "shape": "palmate",
+    "groups": 27,
+    "width": 38,
+    "length": 45,
+    "seed": 4
+  },
+  "narrow": {
+    "shape": "oval",
+    "groups": 37,
+    "width": 15,
+    "length": 54,
+    "seed": 5
+  },
+  "oval": {
+    "shape": "oval",
+    "groups": 34,
+    "width": 29,
+    "length": 43,
+    "seed": 6
+  },
+  "leaflets": {
+    "shape": "serrated",
+    "groups": 33,
+    "width": 18,
+    "length": 43,
+    "twig": 100,
+    "count": 13,
+    "seed": 7
+  },
+  "needles": {
+    "shape": "oval",
+    "groups": 48,
+    "width": 5,
+    "length": 44,
+    "twig": 90,
+    "count": 23,
+    "seed": 8
+  },
+  "scales": {
+    "shape": "oval",
+    "groups": 47,
+    "width": 12,
+    "length": 22,
+    "twig": 65,
+    "count": 15,
+    "seed": 9
+  }
+}

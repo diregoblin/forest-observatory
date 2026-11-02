@@ -3,12 +3,15 @@ extends PanelContainer
 
 ## One small field-guide panel for any selected individual/cohort.
 signal close_requested
+signal follow_requested(enabled: bool)
 var title: Label
+var distinctions: Label
 var subtitle: Label
 var state_label: Label
 var description: Label
 var details: Label
 var details_toggle: CheckButton
+var follow_toggle: CheckButton
 
 
 func _ready() -> void:
@@ -37,10 +40,17 @@ func _ready() -> void:
 	close.tooltip_text = "Закрыть карточку"
 	close.pressed.connect(func(): close_requested.emit())
 	heading.add_child(close)
+	distinctions = _label(box, 15, Color(.90, .77, .46))
+	distinctions.visible = false
 	subtitle = _label(box, 14, Color(.76, .83, .68))
 	state_label = _label(box, 15, Color(.92, .92, .80))
 	box.add_child(HSeparator.new())
 	description = _label(box, 15, Color(.84, .88, .78))
+	follow_toggle = CheckButton.new()
+	follow_toggle.text = "Следовать камерой · C"
+	follow_toggle.tooltip_text = "Сохраняет ракурс. ПКМ или Esc возвращает свободную камеру."
+	follow_toggle.toggled.connect(func(value: bool): follow_requested.emit(value))
+	box.add_child(follow_toggle)
 	var more := CheckButton.new()
 	details_toggle = more
 	more.text = "Условия и состояние"
@@ -61,17 +71,31 @@ func _label(parent: Node, size: int, color: Color) -> Label:
 	return label
 
 
-func show_record(record: Dictionary) -> void:
+func show_record(record: Dictionary, following := false) -> void:
 	visible = not record.is_empty()
 	if not visible:
 		return
+	follow_toggle.visible = record.get("kind") == &"animal" and record.get("alive", false)
+	follow_toggle.set_pressed_no_signal(following and follow_toggle.visible)
 	title.text = str(
 		record.get("title", record.get("display_name", record.get("name", "Наблюдение")))
 	)
+	var names: Array[String] = []
+	var reasons: Array[String] = []
+	for distinction in record.get("distinctions", []):
+		names.append(distinction.title)
+		reasons.append("%s: %s" % [distinction.title, distinction.reason])
+	distinctions.visible = not names.is_empty()
+	distinctions.text = " · ".join(names)
+	distinctions.tooltip_text = "\n".join(reasons)
 	subtitle.text = str(record.get("subtitle", record.get("latin_name", "")))
 	var age: float = record.get("age_years", 0.0)
 	var age_text := "%.1f года" % age if age >= 1 else "%.0f дней" % (age * 365)
-	state_label.text = "%s · %s" % [record.get("stage", ""), age_text]
+	state_label.text = (
+		str(record.get("stage", ""))
+		if record.get("kind") == &"fungus"
+		else "%s · %s" % [record.get("stage", ""), age_text]
+	)
 	if record.get("initial_age", false):
 		state_label.text += "\nНачальный возраст задан сценарием"
 	if record.get("kind") == &"animal":

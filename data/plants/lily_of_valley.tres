@@ -1,0 +1,95 @@
+[gd_resource type="Resource" script_class="ForestPlantDefinition" load_steps=10 format=3]
+[ext_resource type="Script" path="res://scripts/plant_definition.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/plant_module.gd" id="2"]
+[ext_resource type="Texture2D" path="res://art/herbs/broad.png" id="mask"]
+[sub_resource type="QuadMesh" id="Card"]
+size = Vector2(1, 1)
+[sub_resource type="SphereMesh" id="Unit"]
+radius = 1.0
+height = 2.0
+radial_segments = 6
+rings = 2
+[sub_resource type="CylinderMesh" id="Axis0"]
+height = 0.25
+bottom_radius = 0.0018
+top_radius = 0.000504
+radial_segments = 5
+[sub_resource type="Resource" id="M0"]
+script = ExtResource("2")
+mesh = SubResource("Axis0")
+shape = "shoot"
+color = Color(0.38, 0.43, 0.24, 1)
+tip_offset = Vector3(0.025, -0.012, 0)
+bend = Vector3(0.026, 0, 0)
+[sub_resource type="Resource" id="M1"]
+script = ExtResource("2")
+mesh = SubResource("Card")
+shape = "leaf_card"
+foliage = true
+color = Color(0.29, 0.43, 0.22, 1)
+scale_start = Vector3(0.105, 0.29, 0.29)
+count = 2
+turn = 3.141593
+offset = Vector3(0, 0.007, 0)
+rotation_degrees = Vector3(-67, 0, 0)
+card_curve = 0.16
+[sub_resource type="Resource" id="M2"]
+script = ExtResource("2")
+mesh = SubResource("Unit")
+shape = "bell"
+component_kind = &"flower"
+foliage = true
+color = Color(0.91, 0.87, 0.69, 1)
+scale_start = Vector3(0.015, 0.015, 0.015)
+count = 6
+offset = Vector3(0.027, 0.11, 0.013)
+step = Vector3(0, 0.022, 0)
+radial_offset = 0.014
+turn = 2.39996
+rotation_degrees = Vector3(0, 0, 18)
+[resource]
+script = ExtResource("1")
+species_id = &"lily_of_valley"
+display_name = "Ландыш майский"
+latin_name = "Convallaria majalis"
+description = "Корневищный лесной многолетник с широкими листьями и белыми поникающими цветками."
+source_url = "https://powo.science.kew.org/results?q=Convallaria%20majalis"
+growth_form = &"herb"
+life_cycle = &"perennial"
+initial_age_years = Vector2(1,8)
+biomass_kg_c = 0.045
+cn_ratio = 28
+cp_ratio = 330
+dead_decay_per_year = 0.8
+edible_fraction = 0.0
+mature_age_years = 2
+seed_cost_kg_c = 3e-05
+reproduction_per_year = 0.4
+dispersal_m = 3.0
+germination_fraction = 0.18
+recruitment_light = 0.05
+weight = 0.07
+wind_strength = 0.012
+deciduous = true
+leaf_on_day = 110.0
+leaf_off_day = 255.0
+leaf_transition_days = 20.0
+autumn_color = Color(0.75,0.57,0.20,1)
+reference_height_m = 0.28
+max_height_m = 0.5040000000000001
+crown_radius_m = 0.084
+height_growth_m_year = 0.009800000000000001
+transpiration_m_s = 5e-09
+minimum_light = 0.05
+flood_depth_m = 0.18
+stress_days = 18.0
+recovery_days = 8.0
+lifespan_years = 40.0
+leaf_mass_fraction = 0.25
+mycorrhiza_type = &"arbuscular"
+
+insect_pollinated = true
+
+initial_habitat_weights = Vector4(1.5, 0.15, 0.02, 0.001)
+canopy_texture = ExtResource("mask")
+modules = Array[ExtResource("2")]([SubResource("M0"), SubResource("M1"), SubResource("M2")])

@@ -1,8 +1,16 @@
 class_name ForestFungusDefinition
 extends Resource
 
-## SI configuration of an illustrative saprotroph; not species-calibrated.
-@export var species_id := &"fairy_ring_saprotroph"
+## Species identity and functional guild; numeric kinetics remain illustrative.
+@export var species_id := &"marasmius_oreades"
+@export var display_name := "Опёнок луговой"
+@export var latin_name := "Marasmius oreades"
+@export var trophic_type: StringName = &"saprotroph"
+@export var source_url := "https://www.first-nature.com/fungi/marasmius-oreades.php"
+@export var exchange_radius_m := 4.0
+@export var cap_profile: StringName = &"dome"
+@export var stem_radius_m := .019
+@export var cap_height_ratio := .65
 @export var resource_capacity_kg_m2 := .05
 @export var length_scale_m := .125
 @export var time_scale_s := 30.0 * 86400.0
@@ -34,11 +42,15 @@ func options(finite_litter := true, fruiting := true) -> Dictionary:
 		"fruit_lifetime_s": fruit_lifetime_s,
 		"fruit_threshold_kg_m2": fruit_threshold_kg_m2,
 		"max_step_s": .2 * time_scale_s,
-		"finite_litter": finite_litter
+		"finite_litter": finite_litter,
+		"ectomycorrhizal": finite_litter and trophic_type == &"ectomycorrhizal"
 	}
 
 
 func validate() -> void:
+	assert(trophic_type in [&"saprotroph", &"ectomycorrhizal"])
+	assert(cap_profile in [&"dome", &"funnel"] and exchange_radius_m > 0)
+	assert(stem_radius_m > 0 and cap_height_ratio > 0)
 	assert(resource_capacity_kg_m2 > 0 and length_scale_m > 0 and time_scale_s > 0)
 	assert(mortality_s >= 0 and replenishment_s >= 0 and diffusion_ratio > 0)
 	assert(initial_litter_kg_m2 >= 0 and fruiting_s >= 0 and fruit_lifetime_s > 0)
