@@ -176,6 +176,12 @@ func _ready() -> void:
 	hud.pause_requested.connect(_toggle_pause)
 	hud.frame_limit_requested.connect(_toggle_frame_limit)
 	hud.bank_relief_requested.connect(terrain.set_bank_relief_enabled)
+	hud.grass_lighting_requested.connect(
+		func(value: bool):
+			turf_cards.material.set_shader_parameter("root_lighting_strength", float(value))
+	)
+	hud.cloud_shadows_requested.connect(atmosphere.set_cloud_shadows_enabled)
+	hud.volumetric_requested.connect(atmosphere.set_volumetric_enabled)
 	hud.speed_requested.connect(_set_speed)
 	hud.view_requested.connect(_view)
 	hud.season_requested.connect(_cycle_season)
@@ -537,6 +543,7 @@ func _toggle_soil_layers() -> void:
 	_finish_model_work(true)
 	var layers := hud.soil_layers
 	layers.visible = not layers.visible
+	atmosphere.set_diagnostic_enabled(layers.visible)
 	if layers.visible:
 		soil_layer_fog_enabled = atmosphere.world_env.fog_enabled
 		atmosphere.world_env.fog_enabled = false

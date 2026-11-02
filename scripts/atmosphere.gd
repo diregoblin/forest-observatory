@@ -16,6 +16,9 @@ var wind_m_s := 2.0
 var displayed_weather := {}
 var displayed_day := -1.0
 var displayed_hour := -1.0
+var cloud_deck
+var volumetric_enabled := false
+var diagnostic_enabled := false
 
 
 func configure(world_extent_m := 0.0) -> void:
@@ -44,10 +47,18 @@ func configure(world_extent_m := 0.0) -> void:
 	world_env.ssao_radius = 2.0
 	world_env.glow_enabled = true
 	world_env.glow_intensity = .35
+	# Coarse native froxels, quantised by the same low-resolution world render.
+	# Reprojection is disabled so moving leaves do not leave luminous trails.
+	world_env.volumetric_fog_length = 180
+	world_env.volumetric_fog_albedo = Color(.78, .83, .88)
+	world_env.volumetric_fog_anisotropy = .65
+	world_env.volumetric_fog_ambient_inject = .25
+	world_env.volumetric_fog_temporal_reprojection_enabled = false
 	sun.rotation_degrees = Vector3(-27, -38, 0)
 	sun.light_color = Color(1.0, .85, .62)
 	sun.light_energy = 1.35
 	sun.shadow_enabled = true
+	sun.light_volumetric_fog_energy = 1.5
 	# Thin leaves need a little depth bias; a larger normal offset distorts them.
 	sun.shadow_bias = .3
 	# Broad valley shadows must outlive the 280 m near-detail budget. Preserve
@@ -60,6 +71,10 @@ func configure(world_extent_m := 0.0) -> void:
 	sun.directional_shadow_fade_start = .9 if world_extent_m > 0 else .8
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 	add_child(sun)
+	if world_extent_m > 0:
+		cloud_deck = preload("res://scripts/cloud_deck.gd").new()
+		add_child(cloud_deck)
+		cloud_deck.configure(world_extent_m)
 
 
 func set_rain(raining: bool) -> void:
@@ -86,6 +101,7 @@ func set_season(climate: Dictionary) -> void:
 		rain_particles.process_material.initial_velocity_min = 1.5 if snowing else 18.0
 		rain_particles.process_material.initial_velocity_max = 2.5 if snowing else 24.0
 	world_env.fog_density = lerpf(.00065, .0025, cloud_cover)
+	world_env.volumetric_fog_density = lerpf(.0035, .006, cloud_cover)
 	if rain_particles.process_material != null:
 		var wind: Vector2 = climate.get("wind_direction", Vector2.RIGHT) * wind_m_s
 		rain_particles.process_material.direction = (
@@ -104,6 +120,8 @@ func set_season(climate: Dictionary) -> void:
 		Color(.78, .85, 1.0).lerp(Color(1.0, .90, .72), warmth), smoothstep(0, .4, height)
 	)
 	sun.light_energy = solar_energy * (1.0 - .65 * cloud_cover)
+	if cloud_deck != null:
+		_sync_cloud_shadows()
 	world_env.ambient_light_energy = lerpf(.28, .55, daylight) * (1.0 - .25 * cloud_cover)
 	world_env.ambient_light_color = Color(.46, .53, .76).lerp(Color(.62, .73, .75), daylight)
 	sky_mat.sky_top_color = Color(.012, .020, .055).lerp(Color(.19, .34, .43), daylight)
@@ -149,3 +167,39 @@ func attach_observer(camera: Camera3D) -> void:
 func _process(_dt: float) -> void:
 	if observer != null:
 		rain_particles.position = observer.position + Vector3.UP * 8 - observer.global_basis.z * 14
+
+
+func set_cloud_shadows_enabled(value: bool) -> void:
+	if cloud_deck != null:
+		cloud_deck.shadows_enabled = value
+		_sync_cloud_shadows()
+
+
+func set_volumetric_enabled(value: bool) -> void:
+	volumetric_enabled = value and RenderingServer.get_current_rendering_method() == "forward_plus"
+	world_env.volumetric_fog_enabled = volumetric_enabled and not diagnostic_enabled
+
+
+func set_diagnostic_enabled(value: bool) -> void:
+	diagnostic_enabled = value
+	world_env.volumetric_fog_enabled = volumetric_enabled and not diagnostic_enabled
+
+
+func set_cloud_style_enabled(value: bool) -> void:
+	if cloud_deck != null:
+		cloud_deck.set_enabled(value)
+		_sync_cloud_shadows()
+
+
+func _sync_cloud_shadows() -> void:
+	if cloud_deck == null:
+		return
+	var direction := sun.global_basis.z.normalized()
+	cloud_deck.submit(displayed_weather, direction)
+	# Include the elevated deck in the directional caster volume. The default
+	# 20 m pancake clips it out of the near cascades even if far shadows work.
+	sun.directional_shadow_pancake_size = (
+		maxf(20.0, cloud_deck.height / maxf(direction.y, .18) + 96.0)
+		if cloud_deck.visible
+		else 20.0
+	)

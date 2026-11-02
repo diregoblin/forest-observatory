@@ -13,27 +13,21 @@ uniform float weather_time = 0.0;
 uniform sampler3D cloud_noise : filter_linear, repeat_enable;
 uniform float upper_cloud_opacity = .32;
 uniform float lower_cloud_opacity = 1.0;
+uniform vec3 cloud_anchor = vec3(256,0,256);
+uniform float cloud_height = 154.0;
+uniform bool world_clouds = false;
+uniform sampler2D cloud_field_map : filter_linear, repeat_disable;
+uniform float cloud_span = 2048.0;
 
-// Engine-generated seamless gradient field: no per-fragment float hash and
-// no discontinuity at the repeat boundary. The volume is just a noise lookup;
-// clouds themselves remain a perspective-projected horizontal sheet.
-float noise(vec3 p) {
-	return texture(cloud_noise, p * .125).r;
-}
-float cloud(vec3 p) {
-	vec3 warp = vec3(noise(p * .62), noise(p * .62 + 19.7), noise(p * .62 + 37.3));
-	p += (warp - .5) * .85;
-	return .72 * noise(p) + .21 * noise(p.yzx * 2.13 + 8.1)
-		+ .07 * noise(p * 4.3 + 23.4);
-}
+#include "res://shaders/cloud_field.gdshaderinc"
 void sky() {
 	float elevation = max(EYEDIR.y, 0.0);
 	vec3 blue = mix(horizon.rgb, zenith.rgb * vec3(.76, 1.04, 1.25),
 		pow(elevation, .48));
 	float sun_dot = max(dot(EYEDIR, sun_direction), 0.0);
 	blue += sun_tint.rgb * pow(sun_dot, 16.0) * .12 * daylight;
-	// Reflections need broad sky lighting, not two expensive procedural cloud
-	// evaluations per texel on every cubemap face. Visible clouds stay unchanged.
+	// Reflections need broad sky lighting, not per-texel cloud evaluations
+	// on every cubemap face.
 	COLOR = blue;
 	if (!AT_CUBEMAP_PASS) {
 		// A higher horizontal deck, behind the low sheet: smaller angular detail,
@@ -41,7 +35,7 @@ void sky() {
 		vec2 high_sheet = EYEDIR.xz / max(EYEDIR.y + .22, .10) * 6.5;
 		vec3 high_p = vec3(high_sheet.x * .42, 17.3, high_sheet.y * 1.6)
 			+ weather_time * vec3(.003, 0, -.002);
-		float high_field = .72 * noise(high_p) + .28 * noise(high_p * 2.07 + 11.8);
+		float high_field = .72 * cloud_noise_at(high_p) + .28 * cloud_noise_at(high_p * 2.07 + 11.8);
 		float high_threshold = mix(.67, .52, cloud_cover);
 		float high_edge = smoothstep(high_threshold - .03, high_threshold + .09, high_field);
 		vec3 high_color = mix(vec3(.14, .17, .25), vec3(.93, .96, 1.0) * sun_tint.rgb, daylight);
@@ -49,11 +43,25 @@ void sky() {
 			* smoothstep(.03, .25, EYEDIR.y));
 		// Keep the approved flat layer's foreshortening towards the horizon.
 		vec2 sheet = EYEDIR.xz / max(EYEDIR.y + .22, .10) * 2.4;
+		if (world_clouds) {
+			// Use the same world deck as its shadow caster; soften only the horizon.
+			sheet = (POSITION.xz-cloud_anchor.xz) * (2.4/cloud_height)
+				+ EYEDIR.xz / max(EYEDIR.y,.08) * (2.4*(cloud_height-POSITION.y)/cloud_height);
+		}
 		vec3 p = vec3(sheet.x, 2.71, sheet.y) + weather_time * vec3(.008, 0, .003);
-		float field = cloud(p);
+		vec2 deck_uv = .5 + sheet * (cloud_height/(2.4*cloud_span));
+		float border = smoothstep(.0,.04,min(min(deck_uv.x,deck_uv.y),min(1.0-deck_uv.x,1.0-deck_uv.y)));
+		float field;
+		if (world_clouds && border > .999) { field = texture(cloud_field_map,deck_uv).r; }
+		else { field = cloud_field(p);
+			if (world_clouds) { field = mix(field,texture(cloud_field_map,deck_uv).r,border); }
+		}
 		float threshold = mix(.69, .37, cloud_cover);
 		float edge = smoothstep(threshold - .02, threshold + .05, field);
-		float shade_field = cloud(p + sun_direction * .22);
+		// Broad, screen-stable painted core; the cloud silhouette is shared
+		// exactly with the native caster, not independently regenerated noise.
+		float shade_field = field;
+		if (!world_clouds) { shade_field = cloud_field(p + sun_direction * .22); }
 		// Broad painted masses, but no hard interior cutouts or bright sticker rim.
 		float tones = smoothstep(threshold + .015, threshold + .19, shade_field);
 		vec3 shadow = mix(vec3(.10, .13, .22), vec3(.42, .51, .66), daylight);

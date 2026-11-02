@@ -21,11 +21,14 @@ uniform float view_distance = 36.0;
 uniform float mid_distance = 20.0;
 uniform float far_distance = 28.0;
 uniform bool plane_lod_enabled = true;
+uniform float root_lighting_strength = 1.0;
+varying vec3 grass_light_origin;
 varying float grass_detail;
 varying float grass_wetness;
 
 void vertex() {
 	vec3 origin = MODEL_MATRIX[3].xyz;
+	grass_light_origin = (VIEW_MATRIX * vec4(origin + vec3(0,.06,0),1)).xyz;
 	vec2 uv = origin.xz / ecology_extent;
 	vec4 site = textureLod(habitat_map, uv, 0.0);
 	vec4 eco = mix(textureLod(ecology_previous, uv, 0.0), textureLod(ecology_current, uv, 0.0), ecology_blend);
@@ -60,6 +63,12 @@ void vertex() {
 }
 
 void fragment() {
+	// Lighting position is independent of the rasterized card and picking.
+	// Keep nearby volume; distant tufts converge to the ground below them.
+	float root_weight = root_lighting_strength * mix(.55,1.0,1.0-grass_detail);
+	LIGHT_VERTEX = mix(VERTEX,grass_light_origin,root_weight);
+	vec3 ground_normal = normalize((VIEW_MATRIX * vec4(0,1,0,0)).xyz);
+	NORMAL = normalize(mix(NORMAL,ground_normal,root_weight));
 	vec4 blade = texture(tuft,UV);
 	ALBEDO = blade.rgb * COLOR.rgb * mix(vec3(.82,.76,.55),vec3(1.0),ground_greenness);
 	ALBEDO *= mix(1.0,.64,grass_wetness);

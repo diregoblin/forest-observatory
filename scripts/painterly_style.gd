@@ -29,6 +29,8 @@ func configure(a: ForestAtmosphere, v: ForestVegetation, observer: Camera3D = nu
 	original_ssao = atmosphere.world_env.ssao_intensity
 	sky_material.shader = load("res://shaders/painterly_sky.gdshader")
 	sky_material.set_shader_parameter("cloud_noise", preload("res://art/clouds/noise.tres"))
+	if atmosphere.cloud_deck != null:
+		atmosphere.cloud_deck.configure_sky(sky_material)
 	add_child(pixel_renderer)
 	if observer != null:
 		pixel_renderer.configure(observer)
@@ -43,6 +45,7 @@ func set_mode(value: Mode) -> void:
 	mode = value
 	enabled = mode != Mode.BASELINE
 	pixel_renderer.set_enabled(mode == Mode.PIXEL)
+	atmosphere.set_cloud_style_enabled(enabled)
 	atmosphere.world_env.sky.sky_material = sky_material if enabled else original_sky
 	atmosphere.world_env.ssao_intensity = .80 if enabled else original_ssao
 	for material in original_shaders:

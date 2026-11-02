@@ -14,6 +14,9 @@ signal load_requested
 signal soil_layers_requested
 signal options_toggled(open: bool)
 signal bank_relief_requested(enabled: bool)
+signal grass_lighting_requested(enabled: bool)
+signal cloud_shadows_requested(enabled: bool)
+signal volumetric_requested(enabled: bool)
 
 var info: Label
 var journal: Label
@@ -25,6 +28,9 @@ var dam_button: Button
 var pause_button: Button
 var frame_limit_button: Button
 var bank_relief_button: CheckButton
+var grass_lighting_button: CheckButton
+var cloud_shadows_button: CheckButton
+var volumetric_button: CheckButton
 var style_button: Button
 var season_button: Button
 var calendar_label: Label
@@ -193,6 +199,24 @@ func _build_options(root: Control, settings: ForestSettings) -> void:
 	bank_relief_button.tooltip_text = "Мелкие неровности сухого песка вблизи. Добавляет геометрию и нагрузку на GPU."
 	bank_relief_button.toggled.connect(func(enabled: bool): bank_relief_requested.emit(enabled))
 	graphics.add_child(bank_relief_button)
+	grass_lighting_button = CheckButton.new()
+	grass_lighting_button.text = "Освещение травы от земли"
+	grass_lighting_button.button_pressed = true
+	grass_lighting_button.tooltip_text = "Согласовать свет и тени пучков с поверхностью под ними."
+	grass_lighting_button.toggled.connect(func(value: bool): grass_lighting_requested.emit(value))
+	graphics.add_child(grass_lighting_button)
+	cloud_shadows_button = CheckButton.new()
+	cloud_shadows_button.text = "Тени облаков"
+	cloud_shadows_button.button_pressed = true
+	cloud_shadows_button.tooltip_text = "Движущиеся тени низких облаков на всём лесу. Добавляет нагрузку на GPU."
+	cloud_shadows_button.toggled.connect(func(value: bool): cloud_shadows_requested.emit(value))
+	graphics.add_child(cloud_shadows_button)
+	volumetric_button = CheckButton.new()
+	volumetric_button.text = "Объёмный свет"
+	volumetric_button.tooltip_text = "Солнечные лучи и объёмная дымка. Эффект заметнее среди деревьев навстречу солнцу; добавляет нагрузку на GPU."
+	volumetric_button.disabled = RenderingServer.get_current_rendering_method() != "forward_plus"
+	volumetric_button.toggled.connect(func(value: bool): volumetric_requested.emit(value))
+	graphics.add_child(volumetric_button)
 	_label(graphics, "F — скрыть или вернуть весь интерфейс", 15, Color(.79, .84, .74))
 
 	var world := _options_page("Мир")

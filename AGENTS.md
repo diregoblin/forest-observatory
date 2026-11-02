@@ -160,3 +160,12 @@ Do not format or patch the third-party addon as part of an application change.
   world extent, far shadow distance is extent-derived, first cascade stays 28 m.
   Check low-sun occlusion at near AND distant receivers, plus an unoccluded
   overhead-sun control. Don't darken global sunlight to hide a local shadow gap.
+
+- Low-deck sky and cloud caster share one HDR field (`cloud_deck.gd`), updated
+  on submitted weather time or asynchronous noise completion, never camera
+  motion. A large shadow-only plane needs subdivisions and sufficient native
+  pancake depth; preserve near/far and opaque/no-caster controls. Reset ambient
+  after set_season in direct-light assays: that method restores natural ambient.
+  Measure the cloud field viewport separately from world/composition GPU times.
+  Volumetrics are an optional coarse native Forward+ effect, off by default;
+  suppress them for soil diagnostics without losing the user's preference.
