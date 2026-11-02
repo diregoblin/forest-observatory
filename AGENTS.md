@@ -167,5 +167,5 @@ Do not format or patch the third-party addon as part of an application change.
   pancake depth; preserve near/far and opaque/no-caster controls. Reset ambient
   after set_season in direct-light assays: that method restores natural ambient.
   Measure the cloud field viewport separately from world/composition GPU times.
-  Volumetrics are an optional coarse native Forward+ effect, off by default;
+  Volumetrics are a switchable coarse native Forward+ effect, on by default;
   suppress them for soil diagnostics without losing the user's preference.

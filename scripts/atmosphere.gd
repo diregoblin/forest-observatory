@@ -17,7 +17,7 @@ var displayed_weather := {}
 var displayed_day := -1.0
 var displayed_hour := -1.0
 var cloud_deck
-var volumetric_enabled := false
+var volumetric_enabled := true
 var diagnostic_enabled := false
 
 
@@ -54,6 +54,7 @@ func configure(world_extent_m := 0.0) -> void:
 	world_env.volumetric_fog_anisotropy = .65
 	world_env.volumetric_fog_ambient_inject = .25
 	world_env.volumetric_fog_temporal_reprojection_enabled = false
+	set_volumetric_enabled(volumetric_enabled)
 	sun.rotation_degrees = Vector3(-27, -38, 0)
 	sun.light_color = Color(1.0, .85, .62)
 	sun.light_energy = 1.35

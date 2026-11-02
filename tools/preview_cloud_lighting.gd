@@ -25,6 +25,10 @@ func _run() -> void:
 	scene.camera.set_process(false)
 	scene.hud.visible = false
 	Engine.max_fps = 30
+	assert(scene.atmosphere.volumetric_enabled)
+	assert(scene.atmosphere.world_env.volumetric_fog_enabled)
+	assert(scene.hud.volumetric_button.button_pressed)
+	scene.atmosphere.set_volumetric_enabled(false)
 	var frozen := model_bytes()
 	var climate := ForestClimate.sample(0, 155, 60, 12)
 	climate.cloud_cover = .65
@@ -98,11 +102,12 @@ func _run() -> void:
 		scene.atmosphere.set_cloud_shadows_enabled(shadows)
 		costs.append(await benchmark(climate, false, shadows))
 	scene.atmosphere.set_cloud_shadows_enabled(true)
+	scene.atmosphere.set_volumetric_enabled(true)
 	scene.hud.visible = true
 	scene.hud.set_options_open(true)
 	for frame in 4:
 		await RenderingServer.frame_post_draw
-	assert(not scene.hud.volumetric_button.button_pressed)
+	assert(scene.hud.volumetric_button.button_pressed)
 	for button in [
 		scene.hud.volumetric_button, scene.hud.cloud_shadows_button, scene.hud.grass_lighting_button
 	]:
@@ -110,7 +115,7 @@ func _run() -> void:
 		await click(button)
 	scene.hud.set_options_open(false)
 	scene.hud.visible = false
-	assert(not scene.atmosphere.world_env.volumetric_fog_enabled)
+	assert(scene.atmosphere.world_env.volumetric_fog_enabled)
 	assert(scene.atmosphere.cloud_deck.shadows_enabled)
 	assert(scene.turf_cards.material.get_shader_parameter("root_lighting_strength") == 1.0)
 	scene.atmosphere.set_volumetric_enabled(true)
@@ -118,7 +123,6 @@ func _run() -> void:
 	assert(not scene.atmosphere.world_env.volumetric_fog_enabled)
 	scene._toggle_soil_layers()
 	assert(scene.atmosphere.world_env.volumetric_fog_enabled)
-	scene.atmosphere.set_volumetric_enabled(false)
 	scene.hud.visible = true
 	scene.hud.set_options_open(true)
 	await photo_cloud("08-options")
@@ -130,6 +134,7 @@ func _run() -> void:
 				"phases": phases,
 				"costs": costs,
 				"actual_gui_toggles": true,
+				"volumetric_default_on": true,
 				"diagnostic_suppresses_volume": true,
 				"unchanged_models": true
 			},

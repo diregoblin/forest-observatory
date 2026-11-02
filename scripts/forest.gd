@@ -158,6 +158,7 @@ func _ready() -> void:
 	dam_view.configure(barrier, settings.dam_height)
 	add_child(hud)
 	hud.configure(settings, animals.definitions)
+	hud.volumetric_button.set_pressed_no_signal(atmosphere.volumetric_enabled)
 	hud.configure_fungi(fungi)
 	hud.options_toggled.connect(
 		func(open: bool):

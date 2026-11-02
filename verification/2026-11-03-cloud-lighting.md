@@ -16,7 +16,7 @@ volumetric fog; it does not reproduce his custom engine patches or shell-raymarc
   avoids recomputing the expensive noise in each directional shadow-map pixel.
   Ordinary native shadows reach terrain, cards, meshes, animals, water and fog
   without replacing PBR, multiplying albedo or removing ambient light.
-- **Volumetric light**, off by default: stock Forward+ froxels, volume size 64 and
+- **Volumetric light**, on by default in Forward+: stock froxels, volume size 64 and
   depth 32 (height follows viewport aspect), 180 m integration range. No temporal
   reprojection, no new frame-random pattern. Density follows submitted cloud
   cover. Existing pixel enlargement/posterization also affects this image.
@@ -25,8 +25,11 @@ volumetric fog; it does not reproduce his custom engine patches or shell-raymarc
   actual occluders. Other rendering backends disable its checkbox.
 
 All three have independent controls in **Options → View**, beside bank detail.
-Grass lighting and cloud shadows start on; volumetrics and bank detail start
-off. These are current-session presentation preferences, not ecological state
+Grass lighting, cloud shadows and volumetrics start on; bank detail starts
+off. Pavel requested the volumetric default on after trying it in the actual
+forest (2026-11-03), reporting good visuals and little apparent FPS impact;
+this is user feedback, not a new controlled performance measurement.
+These are current-session presentation preferences, not ecological state
 or new entries in saved-world model schemas. The soil diagnostic temporarily
 suppresses volumetric fog and restores the preference on exit.
 
@@ -84,6 +87,14 @@ GPU_GUARD_LOG=artifacts/cloud-light-final-guard.jsonl tools/preview_isolated.sh 
   `git diff --check` passed.
 
 ### Cost and rejected trials
+
+Default-on follow-up: `artifacts/volumetric-default-preview.log` records a fresh
+successful Forward+ run of `preview_cloud_lighting.gd`. Startup assertions
+checked both the actual environment and the checked HUD control; GUI clicks
+round-tripped off/on, and soil diagnostics suppressed/restored the effect.
+Model snapshots remained unchanged; the options image was inspected.
+Guard exit 0, maximum 61 °C (`artifacts/volumetric-default-guard.jsonl`).
+The general model suite was not rerun for this presentation-default change.
 
 The direct procedural caster took ~11 ms versus ~4.9 ms for the initial
 overview without it; it was rejected. The shared-field version eliminates
