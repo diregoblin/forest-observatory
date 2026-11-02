@@ -91,20 +91,38 @@ func show_record(record: Dictionary, following := false) -> void:
 	subtitle.text = str(record.get("subtitle", record.get("latin_name", "")))
 	var age: float = record.get("age_years", 0.0)
 	var age_text := "%.1f года" % age if age >= 1 else "%.0f дней" % (age * 365)
-	state_label.text = (
-		str(record.get("stage", ""))
-		if record.get("kind") == &"fungus"
-		else "%s · %s" % [record.get("stage", ""), age_text]
-	)
-	if record.get("initial_age", false):
-		state_label.text += "\nНачальный возраст задан сценарием"
-	if record.get("kind") == &"animal":
-		state_label.text += "\n" + str(record.get("details", {}).get("Действие", ""))
-	if not record.get("alive", true):
-		state_label.text += " · погибло"
+	var animal: bool = record.get("kind") == &"animal"
+	details_toggle.text = "Сведения об особи" if animal else "Условия и состояние"
+	if animal:
+		# Identity/age and current state have separate jobs. A dead individual
+		# has one terminal status, not a life stage + action + generic suffix.
+		var sex: String = record.get("sex_label", "")
+		var identity := "%s · %s" % [sex.capitalize(), age_text] if not sex.is_empty() else age_text
+		var status: String = record.get("stage", "")
+		if record.get("alive", false):
+			var action: String = record.get("action_label", record.get("details", {}).get("Действие", ""))
+			if not action.is_empty():
+				status += " · " + action
+		state_label.text = identity + "\n" + status.left(1).to_upper() + status.substr(1)
+	else:
+		state_label.text = (
+			str(record.get("stage", ""))
+			if record.get("kind") == &"fungus"
+			else "%s · %s" % [record.get("stage", ""), age_text]
+		)
+		if record.get("initial_age", false):
+			state_label.text += "\nНачальный возраст задан сценарием"
+		# Plant/fungus stage already describes death when supplied by its model.
+		if not record.get("alive", true) and "погиб" not in state_label.text.to_lower():
+			state_label.text += " · погибло"
 	description.text = str(record.get("description", ""))
 	var lines: Array[String] = []
 	for key in record.get("details", {}):
+		if animal:
+			if key == "Действие":
+				continue # Already visible above, including the single death status.
+			if not record.get("alive", false) and key not in ["Возраст", "Пол", "Родители", "Удачные охоты", "Останки"]:
+				continue # No current hunger, routine, alarm or expected litter after death.
 		lines.append("%s: %s" % [key, record.details[key]])
 	if record.has("source_url") and not str(record.source_url).is_empty():
 		lines.append("Справка: %s" % record.source_url)

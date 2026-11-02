@@ -107,7 +107,7 @@ func _ready() -> void:
 	add_child(camera)
 	camera.configure(land, barrier)
 	add_child(atmosphere)
-	atmosphere.configure()
+	atmosphere.configure(settings.extent)
 	atmosphere.attach_observer(camera)
 	add_child(terrain)
 	terrain.configure(land, camera)

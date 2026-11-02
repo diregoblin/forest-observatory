@@ -244,12 +244,18 @@ func _check_distinctions() -> void:
 	var titles: Array[String] = []
 	for distinction in world.animals.inspect(0).distinctions:
 		titles.append(distinction.title)
-	assert("Гроза подлеска" in titles and "Местная легенда" in titles)
-	assert(world.animals.inspect(1).distinctions.size() < titles.size())
+	assert("Местная легенда" not in titles, "A month is no longer enough for the 150-day distinction")
+	for distinction in world.animals.inspect(1).distinctions:
+		assert(distinction.title != "Гроза подлеска", "No title from another individual's meals")
 	assert(world.animals.snapshot() == observed, "Reading a profile cannot advance title counters")
 	# Definition-derived boundary fixtures, separate from the executed-life control above.
-	var fixture := chamber()
+	var fixture := chamber(true, false, true)
+	var requested_thresholds := {
+		"consumed_c_kg": 3.75, "distance_m": 500.0,
+		"rested_s": 15 * ForestClimate.DAY_S, "lived_s": 150 * ForestClimate.DAY_S
+	}
 	for rule in ForestAnimals.DISTINCTIONS:
+		assert(rule.minimum == requested_thresholds[rule.metric], "All old thresholds increased exactly fivefold")
 		fixture.animals.life_records[0] = fixture.animals._empty_life_record()
 		fixture.animals.life_records[0][rule.metric] = float(rule.minimum) - .001
 		assert(fixture.animals.inspect(0).distinctions.is_empty())
@@ -262,8 +268,19 @@ func _check_distinctions() -> void:
 		)
 	var panel := ForestObservationPanel.new()
 	root.add_child(panel)
-	panel.show_record(world.animals.inspect(0))
+	fixture.animals.life_records[0] = fixture.animals._empty_life_record()
+	fixture.animals.life_records[0].consumed_c_kg = 3.75
+	panel.show_record(fixture.animals.inspect(0))
 	assert(panel.distinctions.visible and "Гроза подлеска" in panel.distinctions.text)
+	assert(panel.follow_toggle.visible)
+	for id in 2:
+		fixture.animals._die(id)
+		panel.show_record(fixture.animals.inspect(id))
+		assert(panel.state_label.text.to_lower().count("погиб") == 1)
+		assert(panel.state_label.text.ends_with("Погибла" if id == 0 else "Погиб"))
+		assert(not panel.follow_toggle.visible)
+		assert("Суточный ритм" not in panel.details.text and "Выводок" not in panel.details.text)
+		assert("Действие" not in panel.details.text and "Останки" in panel.details.text)
 	panel.show_record({"title": "Растение", "kind": &"plant"})
 	assert(
 		not panel.distinctions.visible and panel.distinctions.text.is_empty(),

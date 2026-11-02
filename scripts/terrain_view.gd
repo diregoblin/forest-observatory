@@ -61,6 +61,8 @@ func configure(land: ForestLandscape, camera: Camera3D) -> void:
 	# The optional bank-quality setting enables only near native tessellation.
 	terrain.tessellation_level = 0
 	terrain.collision_mode = 0
+	# A heightfield represents solid earth, not a one-sided sheet at grazing light.
+	terrain.cast_shadows = RenderingServer.SHADOW_CASTING_SETTING_DOUBLE_SIDED
 	terrain.set_camera(camera)
 	var h := Image.create(
 		settings.terrain_resolution, settings.terrain_resolution, false, Image.FORMAT_RF

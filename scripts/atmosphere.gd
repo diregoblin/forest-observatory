@@ -18,7 +18,7 @@ var displayed_day := -1.0
 var displayed_hour := -1.0
 
 
-func configure() -> void:
+func configure(world_extent_m := 0.0) -> void:
 	environment = world_env
 	world_env.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
@@ -50,7 +50,14 @@ func configure() -> void:
 	sun.shadow_enabled = true
 	# Thin leaves need a little depth bias; a larger normal offset distorts them.
 	sun.shadow_bias = .3
-	sun.directional_shadow_max_distance = 280
+	# Broad valley shadows must outlive the 280 m near-detail budget. Preserve
+	# the first cascade's 28 m coverage instead of enlarging every near texel.
+	var shadow_distance := maxf(280.0, world_extent_m * 1.6)
+	sun.directional_shadow_max_distance = shadow_distance
+	sun.directional_shadow_split_1 = 28.0 / shadow_distance
+	sun.directional_shadow_split_2 = 84.0 / shadow_distance if world_extent_m > 0 else .2
+	sun.directional_shadow_split_3 = 280.0 / shadow_distance if shadow_distance > 280.0 else .5
+	sun.directional_shadow_fade_start = .9 if world_extent_m > 0 else .8
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 	add_child(sun)
 

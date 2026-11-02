@@ -15,26 +15,26 @@ const DISTINCTIONS := [
 	{
 		"title": "Гроза подлеска",
 		"metric": "consumed_c_kg",
-		"minimum": .75,
+		"minimum": 3.75,
 		"reason": "Основательно познакомился с местной растительностью."
 	},
 	{
 		"title": "Ушёл за хлебом",
 		"metric": "distance_m",
-		"minimum": 100.0,
+		"minimum": 500.0,
 		"reason": "Намотал немало лесных дорог."
 	},
 	{
 		"title": "Мастер тихого часа",
 		"metric": "rested_s",
-		"minimum": 3 * ForestClimate.DAY_S,
+		"minimum": 15 * ForestClimate.DAY_S,
 		"reason": "Знает толк в долгом отдыхе и уютных укрытиях."
 	},
 	{
 		"title": "Местная легенда",
 		"metric": "lived_s",
-		"minimum": 30 * ForestClimate.DAY_S,
-		"reason": "Прожил в наблюдаемом лесу целый модельный месяц."
+		"minimum": 150 * ForestClimate.DAY_S,
+		"reason": "150 биологических суток в наблюдаемом лесу."
 	}
 ]
 var land: ForestLandscape
@@ -1288,7 +1288,7 @@ func inspect(id: int) -> Dictionary:
 		"flee": "убегает от хищника",
 		"hunt": "преследует добычу",
 		"search_prey": "ищет добычу",
-		"dead": "погибла"
+		"dead": "погибла" if sexes[id] == 0 else "погиб"
 	}
 	var movement_note := (
 		"Сценарно %.2f м / биологические сутки, не скорость бега"
@@ -1298,6 +1298,10 @@ func inspect(id: int) -> Dictionary:
 	for rule in DISTINCTIONS:
 		if life_records[id][rule.metric] >= rule.minimum:
 			distinctions.append({"title": rule.title, "reason": rule.reason})
+	var action_label: String = (
+		("плывёт · " if alive[id] and is_swimming(id) else "")
+		+ labels.get(actions[id], actions[id])
+	)
 	return {
 		"kind": "animal",
 		"id": id,
@@ -1313,11 +1317,13 @@ func inspect(id: int) -> Dictionary:
 		"age_years": age_years[id],
 		"initial_age": born_at[id] < 0,
 		"alive": bool(alive[id]),
+		"sex_label": "самка" if sexes[id] == 0 else "самец",
+		"action_label": action_label,
 		"stage":
 		(
 			("детёныш" if age_years[id] * 365 < definition.maturity_days else "взрослая особь")
 			if alive[id]
-			else "погибла"
+			else labels.dead
 		),
 		"state": actions[id],
 		"action": actions[id],
@@ -1338,8 +1344,7 @@ func inspect(id: int) -> Dictionary:
 		),
 		"details":
 		{
-			"Действие":
-			("плывёт · " if is_swimming(id) else "") + labels.get(actions[id], actions[id]),
+			"Действие": action_label,
 			"Энергия": "%.0f кДж" % energy_kj[id],
 			"Суточный ритм": "Сон по солнечным часам; голод и опасность будят",
 			"Тревога": "Помнит угрозу" if alarm_remaining[id] > 0 else "Нет замеченной угрозы",

@@ -153,3 +153,10 @@ Do not format or patch the third-party addon as part of an application change.
   turn presentation displacement into an authoritative bank, ravine or obstacle.
   Particle grass and static-level ocean remain isolated render studies, not
   established performance improvements or ecological/hydrological replacements.
+
+- Terrain3D `cast_shadows` uses the RenderingServer enum (not the identically
+  numbered GeometryInstance3D enum; typed GDScript rejects the latter). Keep
+  terrain shadow coverage separate from near-detail coverage: atmosphere gets
+  world extent, far shadow distance is extent-derived, first cascade stays 28 m.
+  Check low-sun occlusion at near AND distant receivers, plus an unoccluded
+  overhead-sun control. Don't darken global sunlight to hide a local shadow gap.
