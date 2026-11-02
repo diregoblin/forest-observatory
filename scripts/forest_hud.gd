@@ -451,9 +451,9 @@ func _duration(seconds: float) -> String:
 	return "%.1f мин" % (seconds / 60.0) if seconds >= 60 else "%.1f с" % seconds
 
 
-func configure_fungi(fungi: ForestFungi) -> void:
+func configure_fungi(fungi: ForestFungi, observer: Node3D) -> void:
 	add_child(fungi_map)
-	fungi_map.configure(fungi)
+	fungi_map.configure(fungi, observer)
 
 
 func toggle_fungi_map() -> void:

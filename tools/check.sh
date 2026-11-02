@@ -11,7 +11,7 @@ native/build/soil_checks > artifacts/soil-native-check.json
 ./tools/run.sh --headless --editor --import --quit > artifacts/import.log 2>&1
 python - <<'PY'
 from pathlib import Path
-for name in ('spring-check.json', 'water-chunks-check.json', 'timeline-debt-check.json', 'animal-fastpath-check.json', 'native-plant-light-check.json', 'herb-geometry-check.json', 'fauna-geometry-check.json', 'bird-flight-check.json', 'terrain-upgrade-check.json'):
+for name in ('fungi-maps/report.json', 'fungi-maps/headless-report.json', 'spring-check.json', 'water-chunks-check.json', 'timeline-debt-check.json', 'animal-fastpath-check.json', 'native-plant-light-check.json', 'herb-geometry-check.json', 'fauna-geometry-check.json', 'bird-flight-check.json', 'terrain-upgrade-check.json'):
     Path('artifacts', name).unlink(missing_ok=True)
 for name in ('water-check.json', 'contracts.json', 'controls.json', 'ecology-check.json', 'fungi-check.json', 'understory-check.json', 'animals-check.json', 'population-check.json', 'animal-behaviour-check.json', 'fungus-pick-check.json', 'observation-check.json', 'world-check.json', 'ecosystem-check.json', 'worker-check.json', 'weather-habitat-check.json', 'initial-deadwood-check.json', 'animal-motion-check.json', 'food-web-check.json', 'place-memory-check.json', 'soil-layers-check.json', 'soil-layers-controls.json', 'boars-check.json', 'detail-distance-check.json', 'site-surface-check.json'):
     Path('artifacts', name).unlink(missing_ok=True)
@@ -41,6 +41,7 @@ timeout 45 ./tools/run.sh --headless --script res://tools/check_weather_habitat.
 timeout 45 ./tools/run.sh --headless --script res://tools/check_initial_deadwood.gd > artifacts/initial-deadwood-check.log 2>&1
 timeout 45 ./tools/run.sh --headless --script res://tools/check_place_memory.gd > artifacts/place-memory-check.log 2>&1
 timeout 30 ./tools/run.sh --headless --script res://tools/check_soil_layers.gd > artifacts/soil-layers-check.log 2>&1
+timeout 90 ./tools/run.sh --headless --script res://tools/check_fungi_maps.gd -- --check-fungi-maps > artifacts/fungi-maps-check.log 2>&1
 timeout 45 ./tools/run.sh --headless -- --check-soil-layers > artifacts/soil-layers-controls.log 2>&1
 timeout 30 ./tools/run.sh --headless --script res://tools/check_detail_distance.gd > artifacts/detail-distance-check.log 2>&1
 timeout 45 ./tools/run.sh --headless --script res://tools/check_site_surface.gd > artifacts/site-surface-check.log 2>&1
@@ -72,6 +73,9 @@ for name in ('water-check.log', 'contracts.log', 'ecology-check.log', 'fungi-che
     log = (root / name).read_text()
     assert 'ERROR:' not in log, (name, log[-4000:])
 editor_log = (root / 'import.log').read_text()
+assert json.loads((root / 'fungi-maps/headless-report.json').read_text()).get('passed') is True
+assert 'FUNGI_MAPS ' in (root / 'fungi-maps-check.log').read_text()
+assert 'ERROR:' not in (root / 'fungi-maps-check.log').read_text()
 assert json.loads((root / 'initial-deadwood-check.json').read_text()).get('passed') is True
 assert 'ERROR:' not in (root / 'initial-deadwood-check.log').read_text()
 assert 'SCRIPT ERROR' not in editor_log and 'Failed to load' not in editor_log

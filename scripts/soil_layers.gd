@@ -37,6 +37,12 @@ var limit := 1.0
 var units := "мм"
 var resolution := 0
 var cell_size := 0.0
+var fine_patches: Array = []
+var background_values := PackedFloat64Array()
+var fine_texture: ImageTexture
+var fine_layout: ImageTexture
+var map_material := ShaderMaterial.new()
+var hovered_point := Vector2(-1, -1)
 var field_texture: ImageTexture
 var selector := OptionButton.new()
 var hide_cover := CheckBox.new()
@@ -78,6 +84,8 @@ func configure() -> void:
 	caption.text = "Север ↑ · вся долина · наведи на карту"
 	caption.add_theme_font_size_override("font_size", 13)
 	box.add_child(caption)
+	map_material.shader = preload("res://shaders/soil_diagnostic_map.gdshader")
+	map.material = map_material
 	map.custom_minimum_size = Vector2(256, 256)
 	map.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	map.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -88,6 +96,7 @@ func configure() -> void:
 	map.mouse_exited.connect(
 		func():
 			hovered_cell = -1
+			hovered_point = Vector2(-1, -1)
 			_show_sample()
 	)
 	box.add_child(map)
@@ -162,26 +171,107 @@ func refresh(soil: ForestSoil, water: ForestWatershed) -> void:
 	var image := Image.create(resolution, resolution, false, Image.FORMAT_RGBA8)
 	var minimum := INF
 	var maximum := -INF
+	background_values = values
+	var background_areas := PackedFloat64Array()
+	if LAYERS[selected].has("field"):
+		var background: Dictionary = soil.native.diagnostic_background(LAYERS[selected].field)
+		background_values = background.values
+		background_areas = background.area
+		for k in background_values.size():
+			background_values[k] *= 1000.0
 	for k in values.size():
-		minimum = minf(minimum, values[k])
-		maximum = maxf(maximum, values[k])
-		image.set_pixel(k % resolution, int(k / resolution), color_for(values[k], limit))
+		if background_areas.is_empty() or background_areas[k] > 0:
+			minimum = minf(minimum, background_values[k])
+			maximum = maxf(maximum, background_values[k])
+		image.set_pixel(k % resolution, int(k / resolution), color_for(background_values[k], limit))
 	if field_texture == null:
 		field_texture = ImageTexture.create_from_image(image)
 		map.texture = field_texture
 	else:
 		field_texture.update(image)
+	_refresh_fine(soil)
+	for patch in fine_patches:
+		for value in patch.values:
+			minimum = minf(minimum, value)
+			maximum = maxf(maximum, value)
+	map_material.set_shader_parameter("soil_extent", water.landscape.settings.extent)
+	var parameters := display_parameters()
+	for key in parameters:
+		map_material.set_shader_parameter(key, parameters[key])
 	scale_label.text = (
 		"0                  %.2f                  %.2f %s" % [limit * .5, limit, units]
 	)
 	range_label.text = "В долине: %.3f–%.3f %s" % [minimum, maximum, units]
-	stamp_label.text = "Шаг %.1f м · вода t = %.1f с" % [cell_size, water.clock]
+	stamp_label.text = (
+		"Сетка %.2f м%s\nВода t = %.1f с"
+		% [
+			cell_size,
+			" / %.2f м под грибами" % fine_patches[0].dx if not fine_patches.is_empty() else "",
+			water.clock
+		]
+	)
 	_show_sample()
+
+
+func _refresh_fine(soil: ForestSoil) -> void:
+	fine_patches = []
+	if not LAYERS[selected].has("field"):
+		return  # Water remains on its own coarse grid, even underneath fungi.
+	fine_patches = soil.native.diagnostic_patches(LAYERS[selected].field)
+	if fine_patches.is_empty():
+		return
+	var width := 0
+	var height := 0
+	for patch in fine_patches:
+		width = maxi(width, patch.n)
+		height += patch.n
+	var atlas := Image.create(width, height, false, Image.FORMAT_RGBA8)
+	var layout := Image.create(2, fine_patches.size(), false, Image.FORMAT_RGBAF)
+	var row := 0
+	for index in fine_patches.size():
+		var patch: Dictionary = fine_patches[index]
+		var field: PackedFloat64Array = patch.values
+		for k in field.size():
+			field[k] *= 1000.0
+			atlas.set_pixel(k % patch.n, row + int(k / patch.n), color_for(field[k], limit))
+		patch.values = field
+		layout.set_pixel(0, index, Color(patch.origin.x, patch.origin.y, patch.n * patch.dx, row))
+		layout.set_pixel(1, index, Color(patch.n, patch.dx, 0, 0))
+		row += patch.n
+	if fine_texture == null:
+		fine_texture = ImageTexture.create_from_image(atlas)
+		fine_layout = ImageTexture.create_from_image(layout)
+	else:
+		fine_texture.set_image(atlas)
+		fine_layout.set_image(layout)
+
+
+func display_parameters() -> Dictionary:
+	return {
+		"soil_layer_map": field_texture,
+		"soil_fine_map": fine_texture,
+		"soil_fine_layout": fine_layout,
+		"soil_fine_count": fine_patches.size(),
+		"soil_base_cell_m": cell_size,
+		"soil_grid_enabled": LAYERS[selected].has("field")
+	}
+
+
+func sample_at(point: Vector2) -> Dictionary:
+	for patch in fine_patches:
+		var local: Vector2 = (point - patch.origin) / patch.dx
+		if local.x >= 0 and local.y >= 0 and local.x < patch.n and local.y < patch.n:
+			var cell := Vector2i(local.floor())
+			return {"value": patch.values[cell.y * patch.n + cell.x], "dx": patch.dx}
+	var cell := Vector2i((point / cell_size).floor())
+	cell = cell.clamp(Vector2i.ZERO, Vector2i.ONE * (resolution - 1))
+	return {"value": background_values[cell.y * resolution + cell.x], "dx": cell_size}
 
 
 func _map_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and resolution > 0:
-		var cell := Vector2i(event.position / map.size * resolution)
+		hovered_point = event.position / map.size * resolution * cell_size
+		var cell := Vector2i(hovered_point / cell_size)
 		hovered_cell = (
 			clampi(cell.y, 0, resolution - 1) * resolution + clampi(cell.x, 0, resolution - 1)
 		)
@@ -192,12 +282,13 @@ func _show_sample() -> void:
 	if hovered_cell < 0 or hovered_cell >= values.size():
 		sample_label.text = "Ячейка: наведи курсор на карту"
 		return
+	var point := hovered_point
+	if point.x < 0:
+		point = (
+			Vector2(hovered_cell % resolution + .5, int(hovered_cell / resolution) + .5) * cell_size
+		)
+	var sample := sample_at(point)
 	sample_label.text = (
-		"x %.1f · z %.1f м: %.3f %s"
-		% [
-			(hovered_cell % resolution + .5) * cell_size,
-			(int(hovered_cell / resolution) + .5) * cell_size,
-			values[hovered_cell],
-			units
-		]
+		"x %.2f · z %.2f м: %.3f %s\nЯчейка %.2f × %.2f м"
+		% [point.x, point.y, sample.value, units, sample.dx, sample.dx]
 	)

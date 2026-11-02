@@ -58,7 +58,7 @@ uniform sampler2D traffic_map : filter_linear;
 uniform sampler2D rooting_map : filter_linear, repeat_disable;
 uniform float snow_water_m = 0.0;
 uniform bool soil_layer_enabled = false;
-uniform sampler2D soil_layer_map : source_color, filter_nearest, repeat_disable;
+#include "res://shaders/soil_diagnostic.gdshaderinc"
 // Optional presentation microrelief. Dynamic masks are NOT cached in the buffer.
 uniform bool bank_relief_enabled = false;
 uniform highp sampler2D bank_water_current : filter_linear, repeat_disable;
@@ -649,7 +649,7 @@ void fragment() {
 		// Diagnostic colours bypass snow, lighting and decorative soil texture.
 		// The exact same cell colours and fixed scale appear on the HUD map.
 		ALBEDO = vec3(0.0);
-		EMISSION = texture(soil_layer_map, v_vertex.xz / ecology_extent).rgb;
+		EMISSION = soil_diagnostic_colour(v_vertex.xz, ecology_extent);
 		AO = 1.0;
 		SPECULAR = 0.0;
 		NORMAL_MAP_DEPTH = 0.0;

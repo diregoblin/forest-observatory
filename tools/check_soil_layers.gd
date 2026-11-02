@@ -105,6 +105,8 @@ func _run() -> void:
 	assert(absf((changed[0] - after[0]) * water.cell_area - 7) < 1e-10)
 	assert(soil.native.diagnostic_field(-1).is_empty())
 	assert(soil.native.diagnostic_field(9).is_empty())
+	assert(soil.native.diagnostic_patches(-1).is_empty())
+	assert(soil.native.diagnostic_patches(9).is_empty())
 	var saved := soil.snapshot()
 	var water_saved: Dictionary = water.native.snapshot()
 	var top_before := water.top_water_m.duplicate()
@@ -124,7 +126,23 @@ func _run() -> void:
 				absf(sum_field(values) / 1000 - water.native.snapshot().options.source_m3_s) < 1e-12
 			)
 		else:
+			var fine: Array = soil.native.diagnostic_patches(layer.field)
+			assert(fine.size() == saved.patches.size())
+			for index_patch in fine.size():
+				var patch: Dictionary = fine[index_patch]
+				var fine_mass: float = sum_field(patch.values) * patch.dx * patch.dx
+				assert(absf(fine_mass - sum_field(saved.patches[index_patch][layer.key])) < 1e-9)
+			var background: Dictionary = soil.native.diagnostic_background(layer.field)
+			var composed_total := 0.0
+			for k in background.values.size():
+				composed_total += background.values[k] * background.area[k]
+			for patch in fine:
+				composed_total += sum_field(patch.values) * patch.dx * patch.dx
 			var expected := owned_total(saved, layer.key)
+			assert(
+				absf(composed_total - expected) < 1e-8,
+				"Sparse display must integrate actual coarse remainders + fine owners"
+			)
 			var actual := sum_field(values) / 1000 * water.cell_area
 			assert(absf(expected - actual) < 1e-8, "Map integral equals every actual owner")
 			# Checker must reject a tempting wrong implementation: coarse only.
@@ -152,10 +170,31 @@ func _run() -> void:
 	assert(panel.hovered_cell == 0 and panel.sample_label.text.contains("г/м²"))
 	assert(panel.values[0] == changed[0] * 1000)
 	var pixel := panel.field_texture.get_image().get_pixel(0, 0)
-	var expected_color := ForestSoilLayers.color_for(panel.values[0], panel.limit)
+	var expected_color := ForestSoilLayers.color_for(panel.background_values[0], panel.limit)
 	assert(absf(pixel.r - expected_color.r) <= 1.0 / 255)
 	assert(absf(pixel.g - expected_color.g) <= 1.0 / 255)
 	assert(absf(pixel.b - expected_color.b) <= 1.0 / 255)
+	var fine_sample := panel.sample_at(Vector2(point.x, point.z))
+	assert(fine_sample.dx == dx / 4)
+	var actual_fine: Dictionary = soil.native.sample(point)
+	assert(absf(fine_sample.value - actual_fine.mineral_n_kg_m2 * 1000) < 1e-10)
+	assert(
+		absf(fine_sample.value - panel.values[0]) > 1, "Fine display must reject coarse averages"
+	)
+	var fine_colour := panel.fine_texture.get_image().get_pixel(0, 0)
+	var wanted := ForestSoilLayers.color_for(fine_sample.value, panel.limit)
+	assert(absf(fine_colour.r - wanted.r) <= 1.0 / 255)
+	assert(absf(fine_colour.g - wanted.g) <= 1.0 / 255)
+	assert(absf(fine_colour.b - wanted.b) <= 1.0 / 255)
+	assert(panel.sample_at(Vector2(dx * 2, dx * 2)).dx == dx)
+	# Same partially covered coarse cell, outside the patch.
+	var outside := Vector3(dx * .1, 0, dx * .1)
+	var remainder: Dictionary = soil.native.sample(outside)
+	var remainder_value: float = panel.sample_at(Vector2(outside.x, outside.z)).value
+	assert(absf(remainder_value - remainder.mineral_n_kg_m2 * 1000) < 1e-10)
+	panel.selected = 0
+	panel.refresh(soil, water)
+	assert(panel.fine_patches.is_empty() and panel.display_parameters().soil_fine_count == 0)
 	assert(soil.snapshot() == saved and water.native.snapshot() == water_saved)
 	panel.free()
 	var report := {
@@ -165,7 +204,10 @@ func _run() -> void:
 		"coarse_only_wrong_case_rejected": true,
 		"water_unit_conversion_read_only": true,
 		"fixed_scales": true,
-		"hover_and_cell_colour": true
+		"hover_and_cell_colour": true,
+		"fine_values_and_atlas_match_owner": true,
+		"coarse_average_rejected_for_fine_sample": true,
+		"water_not_artificially_refined": true
 	}
 	FileAccess.open("res://artifacts/soil-layers-check.json", FileAccess.WRITE).store_string(
 		JSON.stringify(report, "  ")

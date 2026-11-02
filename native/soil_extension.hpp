@@ -1,6 +1,7 @@
 #pragma once
 #include "soil.hpp"
 #include <godot_cpp/variant/array.hpp>
+#include <godot_cpp/variant/vector2.hpp>
 #include <godot_cpp/variant/vector3.hpp>
 #include <godot_cpp/variant/packed_vector3_array.hpp>
 #include <unordered_map>
@@ -39,6 +40,8 @@ protected:
         ClassDB::bind_method(D_METHOD("initialize_pattern","organic_weights","mineral_weights","surface_fractions"),&ForestSoilNative::initialize_pattern);
         ClassDB::bind_method(D_METHOD("surface_fields","moisture","cover"),&ForestSoilNative::surface_fields);
         ClassDB::bind_method(D_METHOD("diagnostic_field","field"),&ForestSoilNative::diagnostic_field);
+        ClassDB::bind_method(D_METHOD("diagnostic_patches","field"),&ForestSoilNative::diagnostic_patches);
+        ClassDB::bind_method(D_METHOD("diagnostic_background","field"),&ForestSoilNative::diagnostic_background);
         ClassDB::bind_method(D_METHOD("snapshot"),&ForestSoilNative::snapshot);
         ClassDB::bind_method(D_METHOD("restore","state"),&ForestSoilNative::restore);
     }
@@ -74,22 +77,43 @@ public:
     // Fine cells are summed, never sampled at a base-cell centre or counted twice.
     PackedFloat64Array diagnostic_field(int field) const {
         if(field<0||field>8||core.n==0)return {};
-        auto amount=[field](const forest::SoilCell &c) {
-            switch(field) {
-                case 0:return c.organic.c;case 1:return c.organic.n;case 2:return c.organic.p;
-                case 3:return c.labile.c;case 4:return c.labile.n;case 5:return c.labile.p;
-                case 6:return c.mineral.n;case 7:return c.mineral.p;default:return c.surface_c;
-            }
-        };
         std::vector<double> values(core.n*core.n,0);
-        for(std::size_t k=0;k<values.size();++k)values[k]=amount(core.cells[k]);
+        for(std::size_t k=0;k<values.size();++k)values[k]=diagnostic_amount(core.cells[k],field);
         for(const auto &p:core.patches)for(int z=0;z<p.n;++z)for(int x=0;x<p.n;++x){
             const int bx=std::clamp(int((p.ox+(x+.5)*p.dx)/core.dx),0,core.n-1);
             const int bz=std::clamp(int((p.oz+(z+.5)*p.dx)/core.dx),0,core.n-1);
-            values[bz*core.n+bx]+=amount(p.cells[z*p.n+x]);
+            values[bz*core.n+bx]+=diagnostic_amount(p.cells[z*p.n+x],field);
         }
         for(auto &v:values)v/=core.dx*core.dx;
         return pack(values);
+    }
+    static double diagnostic_amount(const forest::SoilCell &c,int field) {
+        switch(field) {
+            case 0:return c.organic.c;case 1:return c.organic.n;case 2:return c.organic.p;
+            case 3:return c.labile.c;case 4:return c.labile.n;case 5:return c.labile.p;
+            case 6:return c.mineral.n;case 7:return c.mineral.p;default:return c.surface_c;
+        }
+    }
+    // Density of the uncovered coarse owner, not a coarse/fine area average.
+    Dictionary diagnostic_background(int field) const {
+        Dictionary d;if(field<0||field>8)return d;
+        std::vector<double> values,areas;
+        for(const auto &c:core.cells) {
+            values.push_back(c.area>0?diagnostic_amount(c,field)/c.area:0);
+            areas.push_back(c.area);
+        }
+        d["values"]=pack(values);d["area"]=pack(areas);return d;
+    }
+    // Sparse fine display fields in kg/m². Does not expand a 25 cm whole-world grid.
+    Array diagnostic_patches(int field) const {
+        Array result;if(field<0||field>8)return result;
+        for(const auto &p:core.patches) {
+            std::vector<double> values;values.reserve(p.cells.size());
+            for(const auto &c:p.cells)values.push_back(diagnostic_amount(c,field)/c.area);
+            Dictionary d;d["n"]=p.n;d["dx"]=p.dx;d["origin"]=Vector2(p.ox,p.oz);d["values"]=pack(values);
+            result.append(d);
+        }
+        return result;
     }
     PackedFloat64Array surface_fields(const PackedFloat64Array &moisture,const PackedFloat64Array &cover) const {
         if(moisture.size()!=core.n*core.n||cover.size()!=moisture.size())return {};

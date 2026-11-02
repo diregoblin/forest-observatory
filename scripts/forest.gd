@@ -163,7 +163,7 @@ func _ready() -> void:
 	hud.shadow_quality_selector.select(
 		hud.shadow_quality_selector.get_item_index(atmosphere.shadow_filter_quality)
 	)
-	hud.configure_fungi(fungi)
+	hud.configure_fungi(fungi, camera)
 	hud.options_toggled.connect(
 		func(open: bool):
 			if open:
@@ -250,6 +250,8 @@ func _ready() -> void:
 		add_child(probe)
 		probe.start.call_deferred(self)
 	if DisplayServer.get_name() == "headless":
+		if OS.get_cmdline_user_args().has("--check-fungi-maps"):
+			return  # The standalone map check owns its asynchronous scene lifetime.
 		if OS.get_cmdline_user_args().has("--probe-habitat-year"):
 			var year_probe = load("res://tools/probe_habitat_year.gd").new()
 			add_child(year_probe)
@@ -579,6 +581,9 @@ func _refresh_soil_layers() -> void:
 	if hud.soil_layers.visible:
 		hud.soil_layers.refresh(soil, water)
 		terrain.set_soil_layer(hud.soil_layers.field_texture, true)
+		var parameters := hud.soil_layers.display_parameters()
+		for key in parameters:
+			terrain.material.set_shader_param(key, parameters[key])
 
 
 func _apply_soil_layer_visibility() -> void:
