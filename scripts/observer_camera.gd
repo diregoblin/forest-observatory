@@ -1,9 +1,22 @@
 class_name ForestObserverCamera
 extends Camera3D
 
+signal walking_changed(enabled: bool)
+
+const EYE_HEIGHT := 1.7
+const WALK_SPEED := 2.2
+const FAST_WALK_SPEED := 5.0
+const MAX_WALK_SLOPE := 1.1  # Rise/run; a camera constraint, not terrain physics.
+const MAX_WADE_DEPTH := .45
+
 var land: ForestLandscape
 var barrier: ForestBarrier
-var moving := false
+var moving := false  # Looking with RMB; translation is independent of this.
+var walking := false
+var surface_height := Callable()
+var water_surface := Callable()
+var input_blocked := Callable()
+var window_focused := true
 var yaw := 0.0
 var pitch := 0.0
 var followed_id := -1
@@ -11,8 +24,8 @@ var followed_point := Vector3.ZERO
 
 
 func follow(id: int, point: Vector3) -> void:
-	moving = false
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	set_walking(false)
+	release_pointer()
 	followed_id = id
 	followed_point = point
 
@@ -40,33 +53,137 @@ func configure(landscape: ForestLandscape, obstacle: ForestBarrier) -> void:
 	current = true
 
 
-func _process(dt: float) -> void:
-	if not moving:
+func release_pointer() -> void:
+	moving = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+		window_focused = false
+		release_pointer()
+	elif what == NOTIFICATION_WM_WINDOW_FOCUS_IN:
+		window_focused = true
+
+
+func controls_blocked() -> bool:
+	if not window_focused or (input_blocked.is_valid() and input_blocked.call()):
+		return true
+	var focused := get_viewport().gui_get_focus_owner()
+	return focused is LineEdit or focused is TextEdit
+
+
+func ground_at(point: Vector3) -> float:
+	if surface_height.is_valid():
+		var height: float = surface_height.call(point)
+		if is_finite(height):
+			return height
+	return land.height_at(point.x, point.z)
+
+
+func _shallow_enough(point: Vector3, ground: float) -> bool:
+	if not water_surface.is_valid():
+		return true
+	var stage: Vector2 = water_surface.call(point)
+	return stage.y <= .000001 or stage.x - ground <= MAX_WADE_DEPTH
+
+
+func set_walking(enabled: bool, align_to_ground := true) -> bool:
+	if enabled and align_to_ground:
+		var ground := ground_at(position)
+		if not _shallow_enough(position, ground):
+			return false
+		stop_following()
+		position.y = ground + EYE_HEIGHT
+	walking = enabled
+	near = .1 if walking else .3
+	walking_changed.emit(walking)
+	return true
+
+
+func move_input(axes: Vector3, fast: bool, dt: float) -> void:
+	# Input is observer time, independent of pause, playback speed and model RNG.
+	if axes.is_zero_approx() or dt <= 0:
 		return
-	var direction := Vector3.ZERO
+	stop_following()
+	var direction: Vector3
+	if walking:
+		var forward := Vector3(-global_basis.z.x, 0, -global_basis.z.z).normalized()
+		var right := Vector3(global_basis.x.x, 0, global_basis.x.z).normalized()
+		direction = (right * axes.x + forward * -axes.z).limit_length()
+		var distance := minf(dt, .1) * (FAST_WALK_SPEED if fast else WALK_SPEED)
+		# Short samples cannot leap through a bank after a slow frame.
+		var pieces := maxi(1, ceili(distance / .2))
+		var step := direction * distance / pieces
+		for piece in pieces:
+			var candidate := _walk_candidate(position + step)
+			if candidate == position:
+				# Slide along a bank instead of sticking when moving diagonally.
+				candidate = _walk_candidate(position + Vector3(step.x, 0, 0))
+				position = candidate
+				candidate = _walk_candidate(position + Vector3(0, 0, step.z))
+			position = candidate
+	else:
+		direction = (
+			(global_basis.x * axes.x + global_basis.z * axes.z + Vector3.UP * axes.y).limit_length()
+		)
+		position += direction * minf(dt, .1) * (65.0 if fast else 23.0)
+		position.x = clampf(position.x, 4, land.settings.extent - 4)
+		position.z = clampf(position.z, 4, land.settings.extent - 4)
+		position.y = maxf(position.y, ground_at(position) + EYE_HEIGHT)
+
+
+func _walk_candidate(point: Vector3) -> Vector3:
+	point.x = clampf(point.x, 4, land.settings.extent - 4)
+	point.z = clampf(point.z, 4, land.settings.extent - 4)
+	var distance := Vector2(point.x - position.x, point.z - position.z).length()
+	if distance <= .000001:
+		return position
+	var ground := ground_at(point)
+	if absf(ground - ground_at(position)) > distance * MAX_WALK_SLOPE:
+		return position
+	if not _shallow_enough(point, ground):
+		return position
+	point.y = ground + EYE_HEIGHT
+	return point
+
+
+func _process(dt: float) -> void:
+	if controls_blocked():
+		release_pointer()
+		return
+	var axes := Vector3.ZERO
 	if Input.is_physical_key_pressed(KEY_W):
-		direction -= self.global_basis.z
+		axes.z -= 1
 	if Input.is_physical_key_pressed(KEY_S):
-		direction += self.global_basis.z
+		axes.z += 1
 	if Input.is_physical_key_pressed(KEY_A):
-		direction -= self.global_basis.x
+		axes.x -= 1
 	if Input.is_physical_key_pressed(KEY_D):
-		direction += self.global_basis.x
+		axes.x += 1
 	if Input.is_physical_key_pressed(KEY_Q):
-		direction -= Vector3.UP
+		axes.y -= 1
 	if Input.is_physical_key_pressed(KEY_E):
-		direction += Vector3.UP
-	self.position += direction * dt * (65.0 if Input.is_physical_key_pressed(KEY_SHIFT) else 23.0)
-	self.position.x = clampf(self.position.x, 4, land.settings.extent - 4)
-	self.position.z = clampf(self.position.z, 4, land.settings.extent - 4)
-	self.position.y = maxf(self.position.y, land.height_at(self.position.x, self.position.z) + 1.8)
+		axes.y += 1
+	move_input(axes, Input.is_physical_key_pressed(KEY_SHIFT), dt)
+
+
+func _input(event: InputEvent) -> void:
+	# A release over a menu/card must still release an earlier viewport capture.
+	if (
+		event is InputEventMouseButton
+		and event.button_index == MOUSE_BUTTON_RIGHT
+		and not event.pressed
+	):
+		release_pointer()
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if controls_blocked():
+		return
 	if event is InputEventKey and event.pressed and event.physical_keycode == KEY_ESCAPE:
 		stop_following()
-		moving = false
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		release_pointer()
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
 		if event.pressed:
 			stop_following()
@@ -81,6 +198,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func view(n: int) -> void:
+	set_walking(false)
 	stop_following()
 	var target: Vector3
 	if n == 1:
@@ -98,6 +216,7 @@ func view(n: int) -> void:
 
 
 func view_plot(center: Vector2) -> void:
+	set_walking(false)
 	stop_following()
 	var target := Vector3(center.x, land.height_at(center.x, center.y) + .15, center.y)
 	self.position = Vector3(
@@ -109,6 +228,7 @@ func view_plot(center: Vector2) -> void:
 
 
 func view_spring() -> void:
+	set_walking(false)
 	stop_following()
 	var head := land.spring_position()
 	var z := head.y + 17.0

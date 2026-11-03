@@ -53,6 +53,19 @@ engine installations, services, user saves, or other projects for this work.
 
 ## Verification
 
+- Observer movement polls physical keys independently of RMB look capture.
+  Scope that polling to window focus, modal/native popup visibility and text
+  entry; consuming `_unhandled_input` alone does not stop polling. Release
+  capture even when the release lands over UI. Walking uses Terrain3D surface
+  height and submitted water images, never mutable worker-owned fields. Keep
+  it a camera constraint, not an unannounced ecological/character model.
+- UI fixtures must await layout before obtaining click coordinates. Isolated
+  `preview.sh` scripts inherit an automatic camera tour: disable `capture_dir`
+  when testing input. Publish the first committed presentation frame before
+  freezing a worker-enabled fixture and testing its saved state. Native popup
+  Down establishes focus; do not assume Home does. `preview_walk_ui.gd` covers
+  actual routing, two window sizes, model immutability and busy-worker frames.
+
 GPU safety (Pavel, 2026-11-01): launch experiments through `tools/run.sh` or
 `python3 tools/gpu_guard.py -- COMMAND ...`, never the unguarded engine.
 The watchdog refuses a hot/missing GPU and stops its process group at **>=75 C**

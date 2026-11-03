@@ -8,6 +8,7 @@ signal frame_limit_requested
 signal style_requested
 signal speed_requested(value: float)
 signal view_requested(index: int)
+signal camera_mode_requested(walking: bool)
 signal season_requested
 signal save_requested
 signal load_requested
@@ -62,11 +63,11 @@ func configure(settings: ForestSettings, animal_definitions: Array = []) -> void
 	heading.position = Vector2(28, 22)
 	heading.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(heading)
-	_label(heading, "Тихая долина", 26, Color(.97, .96, .87))
+	_label(heading, "Тихая долина", 21, Color(.97, .96, .87))
 	status_label = _label(heading, "", 14, Color(.86, .89, .79))
-	options_button = _button(root, "Опции · Esc", func(): set_options_open(true))
+	options_button = _button(root, "Меню", func(): set_options_open(true))
 	options_button.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	options_button.offset_left = -180
+	options_button.offset_left = -116
 	options_button.offset_right = -28
 	options_button.offset_top = 26
 	options_button.offset_bottom = 62
@@ -99,20 +100,29 @@ func configure(settings: ForestSettings, animal_definitions: Array = []) -> void
 		button.add_theme_stylebox_override("pressed", selected)
 		speed_buttons[float(speed)] = button
 	view_selector = MenuButton.new()
-	view_selector.text = "Точки наблюдения ▾"
+	view_selector.text = "Камера ▾"
 	view_selector.focus_mode = Control.FOCUS_ALL
-	view_selector.custom_minimum_size = Vector2(216, 30)
+	view_selector.custom_minimum_size = Vector2(126, 30)
 	view_selector.add_theme_font_size_override("font_size", 15)
 	view_selector.add_theme_stylebox_override("normal", _panel_style(6))
 	bar.add_child(view_selector)
+	view_selector.get_popup().add_radio_check_item("Полёт", 1001)
+	view_selector.get_popup().add_radio_check_item("Прогулка", 1002)
+	view_selector.get_popup().set_item_checked(0, true)
+	view_selector.get_popup().add_separator("Точки наблюдения")
 	var labels := ["Над кронами", "У ручья", "У преграды", "Грибная поляна"]
 	for definition in animal_definitions:
 		labels.append(definition.get_meta(&"population_label", definition.display_name))
 	labels.append("Тихий ключ")
 	for index in labels.size():
-		view_selector.get_popup().add_item("%d · %s" % [index + 1, labels[index]], index + 1)
-	view_selector.get_popup().id_pressed.connect(func(id: int): view_requested.emit(id))
-	view_selector.tooltip_text = "Перейти к месту или животным · клавиши 1–9"
+		view_selector.get_popup().add_item(labels[index], index + 1)
+	view_selector.get_popup().id_pressed.connect(
+		func(id: int):
+			if id >= 1001:
+				camera_mode_requested.emit(id == 1002)
+			else:
+				view_requested.emit(id)
+	)
 
 	root.add_child(observation_panel)
 	observation_panel.offset_top = 82
@@ -181,9 +191,9 @@ func _build_options(root: Control, settings: ForestSettings) -> void:
 	panel.add_child(content)
 	var header := HBoxContainer.new()
 	content.add_child(header)
-	var title := _label(header, "Опции", 26, Color(.97, .96, .87))
+	var title := _label(header, "Меню", 26, Color(.97, .96, .87))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_button(header, "Вернуться в лес · Esc", func(): set_options_open(false))
+	_button(header, "В лес", func(): set_options_open(false))
 	options_tabs = TabContainer.new()
 	options_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	options_tabs.add_theme_font_size_override("font_size", 16)
@@ -283,7 +293,9 @@ func _build_options(root: Control, settings: ForestSettings) -> void:
 	_label(help, "КАМЕРА", 12, Color(.70, .76, .60))
 	_label(
 		help,
-		"ПКМ + WASD — полёт · Q / E — высота\nShift — быстрее · 1–9 — точки наблюдения",
+		("WASD — движение · ПКМ — повернуть взгляд\n"
+		+ "Q / E — высота в полёте · Shift — быстрее\n"
+		+ "P — прогулка / полёт · 1–9 — точки наблюдения"),
 		16,
 		Color(.93, .94, .83)
 	)
@@ -315,6 +327,16 @@ func set_options_open(open: bool) -> void:
 	options_toggled.emit(open)
 	if not open:
 		get_viewport().gui_release_focus()
+
+
+func camera_controls_blocked() -> bool:
+	return options_overlay.visible or view_selector.get_popup().visible
+
+
+func set_walking(enabled: bool) -> void:
+	var popup := view_selector.get_popup()
+	popup.set_item_checked(popup.get_item_index(1001), not enabled)
+	popup.set_item_checked(popup.get_item_index(1002), enabled)
 
 
 func _show_layer(callback: Callable) -> void:

@@ -111,6 +111,7 @@ func _ready() -> void:
 	atmosphere.attach_observer(camera)
 	add_child(terrain)
 	terrain.configure(land, camera)
+	camera.surface_height = terrain.data.get_surface_height
 	terrain.refresh_ecology(soil, water, groundcover)
 	terrain.refresh_traffic(habitat)
 	add_child(vegetation)
@@ -151,6 +152,7 @@ func _ready() -> void:
 		painterly_style.set_enabled(true)
 	add_child(water_view)
 	water_view.configure(water)
+	camera.water_surface = water_view.display_stage_at
 	terrain.configure_bank_display(water_view)
 	add_child(turf_cards)
 	turf_cards.configure(terrain, camera, vegetation, water_view, painterly_style)
@@ -158,6 +160,8 @@ func _ready() -> void:
 	dam_view.configure(barrier, settings.dam_height)
 	add_child(hud)
 	hud.configure(settings, animals.definitions)
+	camera.input_blocked = hud.camera_controls_blocked
+	camera.walking_changed.connect(hud.set_walking)
 	hud.style_button.visible = painterly_style.debug_controls_enabled
 	hud.volumetric_button.set_pressed_no_signal(atmosphere.volumetric_enabled)
 	hud.shadow_quality_selector.select(
@@ -167,9 +171,8 @@ func _ready() -> void:
 	hud.options_toggled.connect(
 		func(open: bool):
 			if open:
-				camera.moving = false
+				camera.release_pointer()
 				camera.stop_following()
-				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	)
 	hud.style_button.text = "Вид · %s · F8" % painterly_style.mode_title()
 	hud.style_requested.connect(painterly_style.cycle_mode)
@@ -190,6 +193,7 @@ func _ready() -> void:
 	hud.shadow_quality_requested.connect(atmosphere.set_shadow_filter_quality)
 	hud.speed_requested.connect(_set_speed)
 	hud.view_requested.connect(_view)
+	hud.camera_mode_requested.connect(_set_camera_walking)
 	hud.season_requested.connect(_cycle_season)
 	hud.save_requested.connect(_save_world)
 	hud.load_requested.connect(_load_world)
@@ -526,6 +530,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_view(event.physical_keycode - KEY_1 + 1)
 		KEY_C:
 			_set_camera_follow(camera.followed_id < 0)
+		KEY_P:
+			_set_camera_walking(not camera.walking)
 		KEY_F5:
 			_save_world()
 		KEY_F9:
@@ -597,6 +603,7 @@ func _apply_soil_layer_visibility() -> void:
 func _view(index: int) -> void:
 	_finish_model_work(true)
 	camera.stop_following()
+	camera.set_walking(false)
 	if index >= 5 and index - 5 < animals.definitions.size():
 		var definition_id := index - 5
 		var cursor: int = animal_view_cursors.get(definition_id, -1)
@@ -626,6 +633,15 @@ func _view(index: int) -> void:
 		camera.view_spring()
 	else:
 		camera.view(index)
+
+
+func _set_camera_walking(enabled: bool) -> void:
+	_finish_model_work(true)
+	if not camera.set_walking(enabled):
+		hud.notice("Здесь слишком глубоко для прогулки. Перейди на берег.")
+	else:
+		camera.stop_following()
+	_refresh_observation()
 
 
 func _toggle_rain() -> void:
@@ -747,7 +763,7 @@ func _set_camera_follow(enabled: bool) -> void:
 		var selected := observation.selected
 		var id: int = selected.get("id", -1)
 		if selected.get("kind") != &"animal" or id < 0 or not animals.alive[id]:
-			hud.notice("Выбери живое животное мышью или через «Точки наблюдения»")
+			hud.notice("Выбери живое животное мышью или через меню «Камера»")
 		else:
 			var shape := animals_view.display_shape(id)
 			if not shape.is_empty():
@@ -845,6 +861,7 @@ func _world_snapshot() -> Dictionary:
 			"camera_rotation": camera.rotation,
 			"camera_follow_id": camera.followed_id,
 			"camera_follow_point": camera.followed_point,
+			"camera_walking": camera.walking,
 			"selection": observation.selected.duplicate(),
 			"presentation":
 			(
@@ -883,6 +900,9 @@ func _restore_world(state: Dictionary) -> bool:
 		return false
 	var follow_id: Variant = scene.get("camera_follow_id", -1)
 	var follow_point: Variant = scene.get("camera_follow_point", Vector3.ZERO)
+	var walking: Variant = scene.get("camera_walking", false)
+	if not walking is bool or (walking and follow_id != -1):
+		return false
 	if (
 		not follow_id is int
 		or follow_id < -1
@@ -927,6 +947,8 @@ func _restore_world(state: Dictionary) -> bool:
 	camera.pitch = camera.rotation.x
 	camera.followed_id = follow_id
 	camera.followed_point = follow_point
+	camera.set_walking(walking, false)
+	camera.release_pointer()
 	observation.selected = scene.selection.duplicate()
 	groundcover.bind_plants(trees)
 	_reset_presentation()
@@ -1394,6 +1416,7 @@ func _write_report(filename: String) -> void:
 
 func _check_controls() -> void:
 	load("res://tools/check_camera_follow.gd").run(self)
+	load("res://tools/check_camera_walk.gd").run(self)
 	var before_frame_limit := _world_snapshot()
 	hud.frame_limit_button.pressed.emit()
 	assert(Engine.max_fps == 30 and hud.frame_limit_button.text == "Лимит кадров · 30 FPS")

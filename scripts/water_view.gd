@@ -6,6 +6,8 @@ var depth_texture: ImageTexture
 var previous_texture: ImageTexture
 var current_image: Image
 var previous_image: Image
+var bed_image: Image
+var display_extent := 1.0
 var model: ForestWatershed
 var blend_elapsed := 0.0
 var sample_interval := 0.1
@@ -18,6 +20,7 @@ var previous_support := PackedByteArray()
 
 func configure(water: ForestWatershed) -> void:
 	model = water
+	display_extent = water.landscape.settings.extent
 	sample_interval = model.config.water_display_interval_s
 	var plane := PlaneMesh.new()
 	chunk_grid = mini(8, model.resolution)
@@ -35,7 +38,8 @@ func configure(water: ForestWatershed) -> void:
 	var material := ShaderMaterial.new()
 	material.shader = load("res://shaders/water.gdshader")
 	material.set_shader_parameter("world_extent", model.landscape.settings.extent)
-	material.set_shader_parameter("bed_map", _texture(model.bed))
+	bed_image = _image(model.bed)
+	material.set_shader_parameter("bed_map", ImageTexture.create_from_image(bed_image))
 	# Terrain3D samples ground at grid corners; hydro samples cell centres.
 	# Reconstruct stage from wet cells, then intersect it with the finer terrain.
 	# Interpolating dry bank elevations into stage makes the old 4 m terraces.
@@ -142,6 +146,31 @@ func advance_display(dt: float) -> void:
 	material_override.set_shader_parameter(
 		"display_alpha", 1.0 - exp(-2.0 * blend_elapsed / sample_interval)
 	)
+
+
+func display_stage_at(point: Vector3) -> Vector2:
+	# Same wet-cell reconstruction as water.gdshader, from submitted CPU images.
+	# Safe while the coupled worker writes its models; no live depth/model reads.
+	var n := current_image.get_width()
+	var q := Vector2(point.x, point.z) / display_extent * n - Vector2(.5, .5)
+	var cell := q.floor()
+	var f := q - cell
+	var alpha: float = material_override.get_shader_parameter("display_alpha")
+	var stage := 0.0
+	var support := 0.0
+	for z in 2:
+		for x in 2:
+			var i := clampi(int(cell.x) + x, 0, n - 1)
+			var j := clampi(int(cell.y) + z, 0, n - 1)
+			var depth := lerpf(
+				previous_image.get_pixel(i, j).r, current_image.get_pixel(i, j).r, alpha
+			)
+			if depth < .001:
+				continue
+			var weight := (1 - f.x if x == 0 else f.x) * (1 - f.y if z == 0 else f.y)
+			stage += weight * (bed_image.get_pixel(i, j).r + depth)
+			support += weight
+	return Vector2(stage / maxf(support, .000001), support)
 
 
 func _image(values: PackedFloat64Array) -> Image:

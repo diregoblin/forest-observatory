@@ -164,8 +164,11 @@ func _run() -> void:
 	await click(world.hud.view_selector.get_global_rect().get_center())
 	var popup: PopupMenu = world.hud.view_selector.get_popup()
 	assert(popup.visible)
-	await native_popup_key("Down")
-	assert(popup.get_focused_item() == 0 and popup.get_item_id(0) == 1)
+	for item in popup.get_item_count():
+		await native_popup_key("Down")
+		if popup.get_item_id(popup.get_focused_item()) == 1:
+			break
+	assert(popup.get_item_id(popup.get_focused_item()) == 1)
 	await native_popup_key("Return")
 	assert(world.camera.position != creek_camera)
 	assert(not popup.visible)
