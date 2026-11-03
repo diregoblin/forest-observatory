@@ -76,8 +76,11 @@ var habitat: RefCounted:
 	set(value):
 		_habitat_ref = weakref(value) if value != null else null
 var path_history: Array = []  # Per tick: {times: PackedFloat64Array, points: PackedVector3Array}.
-var bins := {}
-var _insect_site_bins := {}
+var _bin_width := 0
+var _bin_heads := PackedInt32Array()
+var _bin_next := PackedInt32Array()
+var _insect_bin_heads := PackedInt32Array()
+var _insect_bin_next := PackedInt32Array()
 var _insect_index_active := false  # Valid only inside this model's coupled step.
 var rng := RandomNumberGenerator.new()
 var elapsed_s := 0.0
@@ -719,14 +722,20 @@ func _rebuild_bins() -> void:
 		species_members.append([])
 	for id in species.size():
 		species_members[species[id]].append(id)
-	bins.clear()
-	for id in plants.positions.size():
+	# The bounded world has dense cell indices. Keep only heads and stable-ID
+	# links, avoiding a hash lookup and an empty Array for every visited bin.
+	_bin_width = ceili(land.settings.extent / BIN_M)
+	_bin_heads.resize(_bin_width * _bin_width)
+	_bin_heads.fill(-1)
+	_bin_next.resize(plants.positions.size())
+	# Prepending in reverse ID order preserves the old bin's ascending order.
+	for id in range(plants.positions.size() - 1, -1, -1):
 		if not plants.alive[id]:
 			continue
 		var key := _bin(plants.positions[id])
-		if not bins.has(key):
-			bins[key] = []
-		bins[key].append(id)
+		var index := key.y * _bin_width + key.x
+		_bin_next[id] = _bin_heads[index]
+		_bin_heads[index] = id
 
 
 func _bin(point: Vector3) -> Vector2i:
@@ -737,12 +746,14 @@ func _nearby(point: Vector3, radius: float) -> Array:
 	var result := []
 	var center := _bin(point)
 	var count := ceili(radius / BIN_M)
-	for z in range(center.y - count, center.y + count + 1):
-		for x in range(center.x - count, center.x + count + 1):
-			for id in bins.get(Vector2i(x, z), []):
+	for z in range(maxi(0, center.y - count), mini(_bin_width - 1, center.y + count) + 1):
+		for x in range(maxi(0, center.x - count), mini(_bin_width - 1, center.x + count) + 1):
+			var id := _bin_heads[z * _bin_width + x]
+			while id >= 0:
 				var offset: Vector3 = plants.positions[id] - point
 				if Vector2(offset.x, offset.z).length_squared() <= radius * radius:
 					result.append(id)
+				id = _bin_next[id]
 	return result
 
 
@@ -2005,18 +2016,20 @@ func _seek_insects(id: int, dt: float, event_time: float, d: ForestAnimalDefinit
 
 func _rebuild_insect_index() -> void:
 	_insect_index_active = false
-	_insect_site_bins.clear()
+	_insect_bin_heads.resize(_bin_width * _bin_width)
+	_insect_bin_heads.fill(-1)
 	if habitat == null:
 		return
+	_insect_bin_next.resize(habitat.insect_sites.size())
 	# Sites/plant positions stay fixed during our step; finite food pools do not.
 	# Index actual feeding points, not habitat-cell centres: a site can be off-centre.
-	for k in habitat.insect_sites.size():
+	for k in range(habitat.insect_sites.size() - 1, -1, -1):
 		var site: int = habitat.insect_sites[k]
 		var point: Vector3 = plants.positions[site] if site >= 0 else habitat.center(k)
 		var key := _bin(point)
-		if not _insect_site_bins.has(key):
-			_insect_site_bins[key] = []
-		_insect_site_bins[key].append(k)
+		var index := key.y * _bin_width + key.x
+		_insect_bin_next[k] = _insect_bin_heads[index]
+		_insect_bin_heads[index] = k
 	_insect_index_active = true
 
 
@@ -2027,9 +2040,12 @@ func _nearby_insect_sites(point: Vector3, radius: float) -> Array:
 	var result := []
 	var center := _bin(point)
 	var count := ceili(radius / BIN_M)
-	for z in range(center.y - count, center.y + count + 1):
-		for x in range(center.x - count, center.x + count + 1):
-			result.append_array(_insect_site_bins.get(Vector2i(x, z), []))
+	for z in range(maxi(0, center.y - count), mini(_bin_width - 1, center.y + count) + 1):
+		for x in range(maxi(0, center.x - count), mini(_bin_width - 1, center.x + count) + 1):
+			var k := _insect_bin_heads[z * _bin_width + x]
+			while k >= 0:
+				result.append(k)
+				k = _insect_bin_next[k]
 	# The reference scans habitat IDs ascending; retain its exact equal-score tie.
 	result.sort()
 	return result
