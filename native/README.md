@@ -1,6 +1,6 @@
 # Native surface + shallow groundwater hydrology
 
-The game has no Python runtime dependency. C++17 `Hydro` owns SI/double arrays;
+C++17 `Hydro` owns SI/double arrays;
 `ForestHydroNative` is a thin batch GDExtension adapter. GDScript reads snapshots.
 
 ## Build and run
@@ -13,11 +13,10 @@ The game has no Python runtime dependency. C++17 `Hydro` owns SI/double arrays;
 
 `build_hydro.sh` pins `Redot-Engine/redot-cpp` to
 `ef6e110918198417521d87335a1bb9d883f5a5a4` (`redot-26.3-stable`), checks an existing
-checkout rather than resetting it, and generates API/header files with the selected
+checkout while preserving local changes, and generates API/header files with the selected
 `REDOT_BIN`. The official 26.3 binary `85e520394` reports **GDExtension API 4.5.2**
-with single-precision engine vectors. This does not prevent `double` scalar arrays
-in the independent solver. Bindings are built against that generated API, not an
-assumed version inferred from the engine's marketing number. The addon is Linux
+with single-precision engine vectors. The independent solver uses `double` scalar
+arrays. Bindings are built against that generated API. The addon is Linux
 x86_64 only so far; other architectures have not been built or tested.
 
 Generated bindings/API, object files and binaries are ignored by Git. CMake builds
@@ -38,8 +37,7 @@ native/build-core/fungi_checks
 ## Numerical contract
 
 The current valley uses 2 m³/s main headwater plus a separate 0.04 m³/s side
-spring. Per-source weights preserve this split. Both are external boundary inputs,
-not groundwater created for free. The ravine is part of the analytical bed; a
+spring. Per-source weights preserve this split. Both are external boundary inputs. The ravine is part of the analytical bed; a
 300 s dry source-only assay and source-off null live in `tools/check_spring.gd`.
 The whole-world configuration now rejects the old bed without altering old saves.
 
@@ -52,11 +50,10 @@ The whole-world configuration now rejects the old bed without altering old saves
   makes equal surfaces stationary, including bed steps and impermeable crests.
 - Parallel-face momentum mixing follows the de Almeida idea, with its strength
   scaled by `dt / local_wave_CFL_time`. A shorter caller/soil-alignment step must
-  not apply an unchanged blend more times per physical second. This time scaling,
-  conservative wet/dry limiter and cell-centred layout are **not** a line-by-line
-  reproduction of Landlab. No result-equivalence claim is made.
+  not apply an unchanged blend more times per physical second. Time scaling, the
+  conservative wet/dry limiter and cell-centred layout are local adaptations.
 - CFL uses gravity-wave speed and the largest surface depth, with a bound on
-  source/rain input during a step. `max_step_s` is a ceiling, not a fixed timestep.
+  source/rain input during a step. `max_step_s` bounds the adaptive timestep from above.
 - `max_froude=1` caps face discharges to the supported subcritical/critical
   approximation regime. Activation counts are exported. Fast supercritical flow,
   shocks, barrier collapse and advective acceleration are out of scope.
@@ -68,15 +65,14 @@ The whole-world configuration now rejects the old bed without altering old saves
 
 ## Soil and separate clocks
 
-This first soil model is a two-bucket profile, **not Green–Ampt or Richards**.
+The soil model uses a two-bucket profile.
 `top` and `root` are equivalent water depths (m). Thickness × porosity is capacity;
 theta and saturation are derived. Material parameters live in `ForestSoilProfile`.
 
 Every water substep reserves at most available surface water, top-layer free
-capacity and `Ksat * dt`. `pending` is a real included storage, not an unaccounted
-future write. No column mixing or expensive root ecology runs at this frequency.
+capacity and `Ksat * dt`. `pending` is included in total water storage. No column mixing or expensive root ecology runs at this frequency.
 Surface evaporation is charged immediately; remaining evaporation demand is
-integrated for the soil clock (the demand is not a water reserve).
+integrated for the soil clock as a requested withdrawal.
 
 At each 30-model-second soil boundary: deposit the reserved infiltration; move
 top water above field capacity into available root storage; drain root excess
@@ -88,18 +84,16 @@ An explicit diffusion ceiling and summed-donor bounds limit each slow substep;
 saturation excess is transferred to surface water. Below-ground outer boundaries
 are sealed; surface barriers do not implicitly become underground cutoff walls.
 The persistent initial stream starts with saturated groundwater beneath it;
-other cells start at the declared 60% mobile capacity. All of it is initial water,
-not a new source. Root drainage is counted as internal recharge. The interval is independently configurable; frequency sensitivity
-is an operator-splitting test, not a promise of frequency-independent physics.
+other cells start at the declared 60% mobile capacity. This water is included
+in initial storage. Root drainage is counted as internal recharge. The interval
+is configurable; frequency-sensitivity tests measure the effect of operator splitting.
 
-The mobile aquifer is a **conceptual extra reservoir**, not a resolved saturated
-pore volume within the two soil buckets. Its default thickness is 1.5 m, effective
+The mobile aquifer is a **conceptual extra reservoir** below the two soil buckets. Its default thickness is 1.5 m, effective
 specific yield 0.18, lateral conductivity 1e-4 m/s. These scenario values are not
 calibrated. Instantaneous saturation-excess returnflow does not resolve
 surface-pond backpressure, capillary rise, reverse bank storage or freeze/thaw.
-No equivalence to Landlab GroundwaterDupuitPercolator is claimed. That maintained
-component was inspected as an existing reference; Python was not embedded and
-its regularized numerical solver was not copied.
+Landlab GroundwaterDupuitPercolator was inspected as a reference
+when developing this bounded reservoir model.
 
 Trees submit one aggregated root-demand array. The native core returns actual
 withdrawals above residual root water and records `transpired_m3`; co-located trees
@@ -118,14 +112,13 @@ losses. Save/restore includes both q histories, pending storage/demand, the part
 soil clock, parameters, crests and cumulative ledger. Restore validates a candidate
 before replacing the running core. Native checkpoint version 3 adds nonnegative per-source weights (normalized over total source input). Version 2 added groundwater, seepage and transpiration. Old v1/v2 snapshots without weights retain uniform source distribution; v3 validates weights and their sum atomically. The CFL source bound uses the largest normalized fraction. Native
 v1 import retains the old external-drain physics; the world wrapper rejects
-configuration mismatches rather than silently changing saved physics.
-The GDScript file API saves **hydrology only**,
-not camera/plant state. The separate `ForestWorldState` registry now supplies
-transactional whole-world save/load; do not confuse the two formats.
+configuration mismatches. The GDScript file API saves **hydrology only**.
+`ForestWorldState` provides a separate transactional whole-world save format
+that also includes plants, animals and the observer.
 
 Rendering samples at 10 wall-Hz and blends the last two depth images each frame;
 the CPU upload image is retained, avoiding texture readback. This interpolation
-is display-only and is one sample behind, never a physical prediction.
+is display-only and lags the solver by one sample.
 
 ## Verification and remaining limits
 
@@ -134,41 +127,37 @@ include a stationary lake, analytic rain volume, a dry domain, wetting front,
 barrier/release/overflow, Manning's uniform-flow fixed point, damping of alternating
 face momentum, the Froude regime bound, capacity/evaporation/drainage, slow-clock
 storage, clock partitioning and a deliberate unaccounted-water mutation.
-Smooth-wave tests compare grid/time refinements; these are synthetic sensitivity
-checks, not physical convergence of the actual forest watershed. The benchmark
+Smooth-wave tests compare grid/time refinements on synthetic cases. The benchmark
 measures CPU core only; `artifacts/runtime.json` measures the rendered scene.
 
 Still pending: an offline Landlab comparison, real-world calibration, Green–Ampt,
 spatially varying soil profiles, surface-stage groundwater coupling and physically driven
 water ripples/shoreline reconstruction. A read-only point inspector is now available in V. GPU computation
-has not been implemented. Soil rates and climate are plausible scenario inputs,
-not field measurements or validated ecological parameters.
+has not been implemented. Soil rates and climate are scenario inputs.
 
 ## Fungal soil plots
 
 `Fungi` (`fungi.hpp/.cpp`) is a separate native float64 model sharing the existing
-extension build, not hydrology state. `ForestFungiNative` exposes batch forcing,
+extension build. It owns its own state. `ForestFungiNative` exposes batch forcing,
 fields, metrics and versioned atomic snapshots (standalone and soil-coupled contracts differ). Four areal carbon stores use
 kg C/m²: available resource, mycelium, finite organic reserve, fruiting biomass.
 Only resource and biomass diffuse. The positive five-point stencil has reflecting
 boundaries and `dt <= .225 dx²/max(D)`. Reaction substeps limit resource turnover;
 first-order losses/transfers use exponential fractions. All uptake and transfers
-are donor-bounded, not repaired by clipping the final pools.
+are donor-bounded.
 
 The paper-reference mode uses unlimited signed resource exchange, fruiting off,
 and c2/c1=1. The forest mode replaces that exchange with transfers to/from the
 finite organic reserve, and adds environmentally gated B→fruit→organic transfers.
 Both modes account for carbon, with external exchange/respiration in the ledger.
 Default yield=1 has no respiratory loss; this intentionally matches the chosen
-paper kinetics, not a calibrated ecosystem carbon-use efficiency.
+paper kinetics.
 
-The resource is a lumped available carbon substrate, **not mineral nitrogen or
-phosphorus**. The modes above describe the standalone reference. In the current
-coupled forest, R/L are mirrors of the single shared soil owner, not independent
-stores: vegetation supplies litter and competes for finite C/N/P. Mycelium and
+The resource represents available carbon substrate, measured in kg C/m². The modes above describe the standalone reference. In the current
+coupled forest, R/L read the stores of the single shared soil owner: vegetation supplies litter and competes for finite C/N/P. Mycelium and
 fruit are fungal-owned; mortality returns elements to the soil. ECM fungi trade
-finite nutrients for actual host carbon, not the saprotrophic uptake channel.
-Moisture is read-only coarse-grid forcing, not fungal water uptake. Biological
+finite nutrients for host carbon.
+Moisture supplies read-only coarse-grid forcing; fungal water uptake is absent. Biological
 seconds are a configured multiple of completed water time. See the shared-soil
 section below and [the current model guide](../docs/models.md).
 
@@ -186,28 +175,26 @@ See [dated equations, parameters, results and limits](../verification/2026-10-30
 - [de Almeida et al. 2012](https://doi.org/10.1029/2011WR011570), improved
   stability through weighted discharge memory.
 - [Landlab OverlandFlow source](https://github.com/landlab/landlab/blob/master/src/landlab/components/overland_flow/generate_overland_flow_deAlmeida.py)
-  was inspected as the open implementation/reference, not imported into the game.
+  was inspected as an open implementation reference.
   Landlab is [MIT, Copyright The Landlab Team](https://github.com/landlab/landlab/blob/master/LICENSE.md).
 - The pinned [redot-cpp](https://github.com/Redot-Engine/redot-cpp/tree/ef6e110918198417521d87335a1bb9d883f5a5a4)
   dependency retains its upstream MIT license/copyright in `native/deps/redot-cpp/LICENSE.md`.
 
 - [Landlab GroundwaterDupuitPercolator source](https://github.com/landlab/landlab/blob/master/src/landlab/components/groundwater/dupuit_percolator.py):
   maintained Boussinesq/Dupuit reference inspected before the bounded native model.
-  Not executed or imported; our saturation-excess coupling is simpler.
+  The local model uses bounded saturation-excess coupling.
 
 - [Karst, Dralle & Thompson (2016), PLoS ONE 11(3):e0149254](https://doi.org/10.1371/journal.pone.0149254),
   CC BY: biomass–resource equations and Gray–Scott correspondence. Equation MathML
   and Figure 3 parameter values were read from the publisher's manuscript XML.
-  No figure pixels or third-party implementation were copied into the game.
 
 ## Shared ecosystem soil (2026-10-31)
 
-`soil.hpp/cpp` stores kg C/N/P amounts (not concentrations) in organic, labile
+`soil.hpp/cpp` stores kg C/N/P amounts in organic, labile
 and mineral pools. The base cells retain only uncovered area after fine-patch
 creation; patch integration is mass-conservative, overlaps are rejected. Native
-soil and fungal calculations remain float64; strict audits sum scalar metrics,
-not float32 `Vector3` display/command values. Soil decay is a declared qualitative
-scenario rule, not a calibrated soil chemistry model.
+soil and fungal calculations remain float64; strict audits sum float64 scalar
+metrics. Soil decay follows qualitative scenario rules.
 
 Coupled fungi exclude mirrored soil pools from their own carbon total. Fungal
 `fields`/snapshots read the current owner even after later plant/animal deposits;
