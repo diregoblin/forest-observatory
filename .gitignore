@@ -17,3 +17,12 @@ artifacts/**
 !artifacts/.gitkeep
 __pycache__/
 *.py[cod]
+
+# Local credentials and private run data are never part of a source release.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+saves/
+exports/

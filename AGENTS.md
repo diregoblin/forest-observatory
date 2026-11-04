@@ -66,11 +66,13 @@ engine installations, services, user saves, or other projects for this work.
   Down establishes focus; do not assume Home does. `preview_walk_ui.gd` covers
   actual routing, two window sizes, model immutability and busy-worker frames.
 
-GPU safety (Pavel, 2026-11-01): launch experiments through `tools/run.sh` or
+GPU safety: launch experiments through `tools/run.sh` or
 `python3 tools/gpu_guard.py -- COMMAND ...`, never the unguarded engine.
 The watchdog refuses a hot/missing GPU and stops its process group at **>=75 C**
-or the first invalid/missing telemetry sample. Pavel explicitly revised the
-previous 70 C ceiling to 75 C; never raise/disable the current ceiling.
+or the first invalid/missing telemetry sample. The 75 C ceiling is the agent's
+conservative working limit, not a manufacturer shutdown specification or a rule
+authored by Pavel (attribution corrected by Pavel, 2026-11-04). Never raise/disable
+the current ceiling.
 Do not repeat the failed thermal soak; use saved foreground telemetry and a
 CPU/headless geometry audit first. No driver/power/fan changes are authorized.
 
