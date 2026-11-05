@@ -108,7 +108,7 @@ func _ready() -> void:
 	add_child(camera)
 	camera.configure(land, barrier)
 	add_child(atmosphere)
-	atmosphere.configure(settings.extent)
+	atmosphere.configure(settings.extent, weather.clouds)
 	atmosphere.attach_observer(camera)
 	add_child(terrain)
 	terrain.configure(land, camera)
@@ -156,6 +156,8 @@ func _ready() -> void:
 		painterly_style.set_enabled(true)
 	add_child(water_view)
 	water_view.configure(water)
+	water_view.material_override.set_shader_parameter("rain_mask", atmosphere.cloud_deck.rain_mask)
+	water_view.material_override.set_shader_parameter("spatial_rain", true)
 	camera.water_surface = water_view.display_stage_at
 	terrain.configure_bank_display(water_view)
 	add_child(turf_cards)
@@ -393,7 +395,8 @@ func _capture_presentation() -> void:
 			presentation_rate = rate
 	presentation_frames.append(frame)
 	# Independent weather sampler owns a committed copy, including snow/overrides.
-	presentation_weather = ForestWeather.new(settings)
+	if presentation_weather == null:
+		presentation_weather = ForestWeather.new(settings)
 	assert(presentation_weather.restore(weather.snapshot()))
 	while presentation_frames.size() > 4:
 		presentation_frames.pop_front()
@@ -477,7 +480,9 @@ func _coupled_tick(climate: Dictionary) -> void:
 	climate = weather.step(settings.ecology_step_s, climate)
 	water.native.set_evaporation(settings.evaporation_m_s * climate.evaporation)
 	water.raining = climate.rain_fraction > .01
-	water.step(settings.ecology_step_s, false, climate.liquid_m_s)
+	water.step(settings.ecology_step_s, false, climate.liquid_m_s, climate.liquid_field_m_s)
+	# The transient grid belongs to water; downstream climate caches keep scalars.
+	climate.erase("liquid_field_m_s")
 	simulation_usec += Time.get_ticks_usec() - tick_started
 	simulation_steps += 1
 	water.sync_fields()

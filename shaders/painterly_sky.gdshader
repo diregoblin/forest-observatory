@@ -17,7 +17,9 @@ uniform vec3 cloud_anchor = vec3(256,0,256);
 uniform float cloud_height = 154.0;
 uniform bool world_clouds = false;
 uniform sampler2D cloud_field_map : filter_linear, repeat_disable;
-uniform float cloud_span = 2048.0;
+uniform float cloud_span = 4096.0;
+uniform sampler2D cloud_density : filter_linear, repeat_enable;
+uniform vec2 cloud_offset_m = vec2(0);
 
 #include "res://shaders/cloud_field.gdshaderinc"
 #include "res://shaders/cloud_opacity.gdshaderinc"
@@ -52,20 +54,17 @@ void sky() {
 			sheet = (POSITION.xz-cloud_anchor.xz) * (2.4/cloud_height)
 				+ EYEDIR.xz / max(EYEDIR.y,.08) * (2.4*(cloud_height-POSITION.y)/cloud_height);
 		}
-		vec3 p = vec3(sheet.x, 2.71, sheet.y) + weather_time * vec3(.008, 0, .003);
 		vec2 deck_uv = .5 + sheet * (cloud_height/(2.4*cloud_span));
-		float border = smoothstep(.0,.04,min(min(deck_uv.x,deck_uv.y),min(1.0-deck_uv.x,1.0-deck_uv.y)));
-		float field;
-		if (world_clouds && border > .999) { field = texture(cloud_field_map,deck_uv).r; }
-		else { field = cloud_field(p);
-			if (world_clouds) { field = mix(field,texture(cloud_field_map,deck_uv).r,border); }
+		float field = texture(cloud_density, deck_uv - cloud_offset_m/cloud_span).r;
+		if (world_clouds && all(greaterThanEqual(deck_uv, vec2(0)))
+			&& all(lessThanEqual(deck_uv, vec2(1)))) {
+			field = texture(cloud_field_map, deck_uv).r;
 		}
 		float threshold = mix(.69, .37, cloud_cover);
 		float edge = cloud_opacity(field, cloud_cover);
 		// Broad, screen-stable painted core; coverage is shared with the native
 		// caster instead of independently regenerated noise.
 		float shade_field = field;
-		if (!world_clouds) { shade_field = cloud_field(p + sun_direction * .22); }
 		// Broad painted masses, but no hard interior cutouts or bright sticker rim.
 		float tones = smoothstep(threshold + .015, threshold + .19, shade_field);
 		vec3 shadow = mix(vec3(.10, .13, .22), vec3(.42, .51, .66), daylight);

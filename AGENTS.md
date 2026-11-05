@@ -177,8 +177,12 @@ Do not format or patch the third-party addon as part of an application change.
   overhead-sun control. Don't darken global sunlight to hide a local shadow gap.
 
 - Low-deck sky and cloud caster share one HDR field (`cloud_deck.gd`), updated
-  on submitted weather time or asynchronous noise completion, never camera
-  motion. A large shadow-only plane needs subdivisions and sufficient native
+  from the immutable density tile on submitted weather time, never camera
+  motion. Rain uses the same advected source sampled by the native weather
+  kernel; render masks never feed back into authoritative water. Preserve
+  texel-centred periodic sampling, local-volume and dry-gap controls. Consume
+  transient liquid arrays in hydrology before passing scalar climate onward;
+  habitat weather snapshots deliberately validate a compact scalar/vector map. A large shadow-only plane needs subdivisions and sufficient native
   pancake depth; preserve near/far and opaque/no-caster controls. Reset ambient
   after set_season in direct-light assays: that method restores natural ambient.
   Measure the cloud field viewport separately from world/composition GPU times.

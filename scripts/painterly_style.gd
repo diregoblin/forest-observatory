@@ -121,6 +121,9 @@ func _process(_dt: float) -> void:
 	_set_sky_parameter(&"cloud_cover", atmosphere.cloud_cover)
 	_set_sky_parameter(&"weather_time", atmosphere.displayed_weather.get("weather_time_s", 0.0))
 
+	if atmosphere.cloud_deck != null:
+		_set_sky_parameter(&"cloud_offset_m", atmosphere.cloud_deck.cloud_offset)
+
 
 func _set_sky_parameter(name: StringName, value: Variant) -> void:
 	if not sky_values.has(name) or sky_values[name] != value:

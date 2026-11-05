@@ -1,4 +1,5 @@
 #include "hydro.hpp"
+#include "weather_field.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -107,6 +108,47 @@ int main(int argc,char **argv) {
         auto rain=flat(8,4,p); rain.advance(3600,true);
         require(std::abs(rain.surface_m3()-0.03*32*32)<1e-9,"analytic rain volume");
         require(std::abs(rain.depth[31]-0.03)<1e-12,"analytic rain depth"); balanced(rain);
+        // Cell forcing: isolated compartments give an independent exact answer.
+        {
+            auto fp=isolated(); fp.rain_m_s=9e-6;
+            auto cells=flat(4,2,fp);
+            std::fill(cells.crest_x.begin(),cells.crest_x.end(),1e6);
+            std::fill(cells.crest_z.begin(),cells.crest_z.end(),1e6);
+            std::vector<double> rates(16); double sum=0;
+            for(int k=0;k<16;++k) { rates[k]=(k%3)*1e-5; sum+=rates[k]; }
+            require(cells.advance_field(30,rates),"spatial precipitation accepted");
+            for(int k=0;k<16;++k)
+                require(std::abs(cells.depth[k]-30*rates[k])<1e-12,"local depth matches local forcing");
+            require(std::abs(cells.input_m3-30*sum*4)<1e-12,"grid sum owns external ledger");
+            require(cells.p.rain_m_s==fp.rain_m_s,"transient field preserves persisted options");
+            balanced(cells);
+            const auto original=cells.depth; const double time=cells.time_s, input=cells.input_m3;
+            require(!cells.advance_field(1,{0,1}),"bad shape rejected");
+            rates[15]=-1; require(!cells.advance_field(1,rates),"negative rate rejected");
+            rates[15]=NAN; require(!cells.advance_field(1,rates),"NaN rate rejected");
+            require(cells.depth==original && cells.time_s==time && cells.input_m3==input,
+                    "invalid forcing is atomic");
+            auto uniform=flat(8,4,fp), field=uniform;
+            require(uniform.advance(100,true) && field.advance_field(100,std::vector<double>(64,fp.rain_m_s)),
+                    "uniform control advances");
+            require(uniform.depth==field.depth && std::abs(uniform.input_m3-field.input_m3)<1e-12,
+                    "uniform grid reproduces uniform rainfall");
+            auto zero=flat(4,2,fp); require(zero.advance_field(5,std::vector<double>(16)),"zero field accepted");
+            require(zero.input_m3==0 && zero.surface_m3()==0,"zero forcing stays dry");
+        }
+        {
+            forest::CloudField cloud;
+            require(cloud.configure(2,8,{0,1,.5,.75}),"cloud tile configure");
+            require(cloud.sample_uv(.25,.25)==0 && cloud.sample_uv(.75,.25)==1,"texel centres");
+            require(std::abs(cloud.sample_uv(.5,.5)-.5625)<1e-15,"independent bilinear centre");
+            require(cloud.sample_uv(0,0)==cloud.sample_uv(1,1),"periodic seam");
+            const double density=cloud.sample(3,7,10,1,2);
+            require(std::abs(density-cloud.sample(6,5,10,4,0))<1e-15,"advection carries density and rain together");
+            require(forest::CloudField::rain_weight(.47,1)==0,"transparent fringe has no rain");
+            require(forest::CloudField::rain_weight(.7,1)==1,"dense core rains");
+            require(!cloud.configure(2,8,{0,1,NAN,.7}) && cloud.sample(3,7,10,1,2)==density,
+                    "bad immutable input rejected atomically");
+        }
         // Dam-break-like wetting front: positivity, internal conservation, no fake source.
         p=isolated(); auto front=flat(20,1,p);
         for(int k=0;k<200;++k) front.depth[k]=0.8;

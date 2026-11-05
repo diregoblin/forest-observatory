@@ -41,6 +41,7 @@ native/build-core/soil_checks
 | `data/plants`, `data/animals`, `data/fungi`, `data/soils` | Неизменяемые определения видов/материалов |
 | `native/` | Float64-ядра воды, общей CNP-почвы, грибов и численные контроли |
 | `scripts/trees.gd`, `animals.gd`, `habitat.gd`, `weather.gd` | Модели биологии/среды |
+| `scripts/cloud_field.gd`, `native/weather_field.hpp` | Общий неизменяемый источник облаков и пространственных осадков |
 | `scripts/forest.gd` | Композиция, общий шаг, worker, транзакции сохранения |
 | `scripts/*_view.gd`, `vegetation.gd`, `shaders/` | Отображение завершённых состояний моделей |
 | `scripts/forest_hud.gd`, `soil_layers.gd`, `observation_panel.gd` | Интерфейс и read-only диагностика |

@@ -49,6 +49,7 @@ public:
                     const std::vector<double> &initial_groundwater = {},
                     const std::vector<double> &weights = {});
     bool advance(double duration_s, bool rain);
+    bool advance_field(double duration_s, const std::vector<double> &liquid_m_s);
     double surface_m3() const;
     double soil_m3() const; // includes water reserved between soil ticks
     double groundwater_m3() const;
@@ -58,8 +59,9 @@ public:
     bool finite_state() const;
 private:
     std::vector<double> outgoing, delta, outlet_flux, old_x, old_z;
-    double stable_step() const;
-    void water_step(double dt, bool rain);
+    double stable_step(double maximum_rain_m_s) const;
+    bool advance_impl(double duration_s, bool rain, const std::vector<double> *rates, double maximum_rain_m_s, double grid_input_m3_s);
+    void water_step(double dt, bool rain, const std::vector<double> *rates, double grid_input_m3_s);
     void soil_step(double dt);
     void groundwater_step(double dt);
     double face_flux(int a, int b, double crest, double previous, double neighbours, double dt);

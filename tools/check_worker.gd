@@ -3,10 +3,15 @@ extends RefCounted
 
 static func run(world) -> void:
 	world.paused = false
+	world.weather.toggle(false)  # Spatial precipitation in both execution paths.
 	var initial: Dictionary = world._world_snapshot()
 	for tick in 16:
 		world._advance_world(world.settings.ecology_step_s)
 	var expected: Dictionary = world._world_snapshot().models
+	assert(
+		not expected.habitat.weather.has("liquid_field_m_s"),
+		"Transient rainfall grid is consumed before persisted climate caches"
+	)
 	assert(world._restore_world(initial))
 	world.use_model_worker = true
 	for tick in 16:
@@ -60,6 +65,7 @@ static func run(world) -> void:
 					{
 						"passed": true,
 						"same_16_ticks_as_sync_reference": true,
+						"spatial_rain_forcing": true,
 						"pause_commits_in_flight_tick": true,
 						"save_load_join_worker": true,
 						"fungi_map_joins_busy_worker": true,

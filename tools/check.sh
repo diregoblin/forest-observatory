@@ -11,7 +11,7 @@ native/build/soil_checks > artifacts/soil-native-check.json
 ./tools/run.sh --headless --editor --import --quit > artifacts/import.log 2>&1
 python - <<'PY'
 from pathlib import Path
-for name in ('dense-bins-check.json', 'fungi-maps/report.json', 'fungi-maps/headless-report.json', 'spring-check.json', 'water-chunks-check.json', 'timeline-debt-check.json', 'animal-fastpath-check.json', 'native-plant-light-check.json', 'herb-geometry-check.json', 'fauna-geometry-check.json', 'bird-flight-check.json', 'terrain-upgrade-check.json', 'wind-check.json'):
+for name in ('dense-bins-check.json', 'fungi-maps/report.json', 'fungi-maps/headless-report.json', 'spring-check.json', 'water-chunks-check.json', 'timeline-debt-check.json', 'animal-fastpath-check.json', 'native-plant-light-check.json', 'herb-geometry-check.json', 'fauna-geometry-check.json', 'bird-flight-check.json', 'terrain-upgrade-check.json', 'wind-check.json', 'spatial-rain-check.json'):
     Path('artifacts', name).unlink(missing_ok=True)
 for name in ('water-check.json', 'contracts.json', 'controls.json', 'ecology-check.json', 'fungi-check.json', 'understory-check.json', 'animals-check.json', 'population-check.json', 'animal-behaviour-check.json', 'fungus-pick-check.json', 'observation-check.json', 'world-check.json', 'ecosystem-check.json', 'worker-check.json', 'weather-habitat-check.json', 'initial-deadwood-check.json', 'animal-motion-check.json', 'food-web-check.json', 'place-memory-check.json', 'soil-layers-check.json', 'soil-layers-controls.json', 'boars-check.json', 'detail-distance-check.json', 'site-surface-check.json'):
     Path('artifacts', name).unlink(missing_ok=True)
@@ -26,6 +26,7 @@ timeout 30 ./tools/run.sh --headless --script res://tools/check_terrain_upgrade.
 timeout 30 ./tools/run.sh --headless --script res://tools/check_canopy.gd > artifacts/canopy-check.log 2>&1
 timeout 30 ./tools/run.sh --headless --script res://tools/check_herb_geometry.gd > artifacts/herb-geometry-check.log 2>&1
 timeout 30 ./tools/run.sh --headless --script res://tools/check_plant_lod.gd > artifacts/plant-lod-check.log 2>&1
+timeout 45 ./tools/run.sh --headless --script res://tools/check_spatial_rain.gd > artifacts/spatial-rain-check.log 2>&1
 timeout 45 ./tools/run.sh --headless --script res://tools/check_wind.gd > artifacts/wind-check.log 2>&1
 timeout 90 ./tools/run.sh --headless --script res://tools/check_ecology.gd > artifacts/ecology-check.log 2>&1
 timeout 90 ./tools/run.sh --headless --script res://tools/check_fungi.gd > artifacts/fungi-check.log 2>&1
@@ -61,7 +62,7 @@ python - <<'PY'
 import json
 from pathlib import Path
 root = Path('artifacts')
-for name in ('canopy-check', 'plant-lod-check', 'dense-bins-check', 'animal-spawn-check', 'short-animal-motion-check', 'water-chunks-check', 'timeline-debt-check', 'animal-fastpath-check', 'native-plant-light-check', 'herb-geometry-check', 'fauna-geometry-check', 'bird-flight-check', 'terrain-upgrade-check', 'wind-check'):
+for name in ('canopy-check', 'plant-lod-check', 'dense-bins-check', 'animal-spawn-check', 'short-animal-motion-check', 'water-chunks-check', 'timeline-debt-check', 'animal-fastpath-check', 'native-plant-light-check', 'herb-geometry-check', 'fauna-geometry-check', 'bird-flight-check', 'terrain-upgrade-check', 'wind-check', 'spatial-rain-check'):
     assert json.loads((root / (name + '.json')).read_text()).get('passed') is True
     assert 'ERROR:' not in (root / (name + '.log')).read_text()
 for name in ('native-check', 'water-check', 'contracts', 'ecology-check', 'fungi-native-check', 'fungi-check', 'soil-native-check', 'understory-check', 'animals-check', 'observation-check', 'world-check', 'controls', 'ecosystem-check', 'worker-check'):

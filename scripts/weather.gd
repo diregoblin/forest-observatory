@@ -4,6 +4,7 @@ extends RefCounted
 ## Seeded fronts on the shared hydrological clock, not a regional forecast.
 ## Uniform snow is water equivalent (m); actual liquid goes through native water.
 const FRONT_S := 85.0
+var clouds: ForestCloudField
 var settings: ForestSettings
 var elapsed_s := 0.0
 var snow_water_m := 0.0
@@ -15,6 +16,7 @@ var forced_until_s := 0.0
 
 func _init(configuration: ForestSettings) -> void:
 	settings = configuration
+	clouds = ForestCloudField.new(settings)
 
 
 func _front(index: int) -> Vector4:
@@ -51,6 +53,8 @@ func sample(climate: Dictionary, at_s := -1.0) -> Dictionary:
 	result.wind_m_s = front.z
 	result.wind_direction = Vector2(cos(index * .71 + .4), sin(index * .71 + .4))
 	result.precipitation_m_s = rain * settings.rainfall_m_s
+	result.precipitation_potential_m_s = result.precipitation_m_s
+	result.cloud_offset_m = clouds.offset_at(t)
 	result.rain_fraction = rain if result.temperature_c > 0 else 0.0
 	result.snow_water_m = snow_water_m
 	result.weather_time_s = t
@@ -70,19 +74,25 @@ func sample(climate: Dictionary, at_s := -1.0) -> Dictionary:
 
 func step(dt: float, climate: Dictionary) -> Dictionary:
 	var forcing := sample(climate, elapsed_s + dt * .5)
-	var amount: float = forcing.precipitation_m_s * dt
+	var melt := 0.0
+	if forcing.temperature_c > 0:
+		# SI degree-day melt from the existing domain-mean snow reservoir.
+		melt = minf(snow_water_m, forcing.temperature_c * 3.0 / 1000 / 86400 * dt)
+	var field := clouds.grid(forcing, melt / dt)
+	var amount: float = field.mean_precipitation_m_s * dt
 	precipitation_m += amount
-	var liquid := amount
+	var liquid := amount + melt
+	var rates: PackedFloat64Array = field.rates
 	if forcing.temperature_c <= 0:
 		snow_water_m += amount
 		liquid = 0
+		rates.fill(0)
 	else:
-		# Scenario degree-day melt, in SI water time, not accelerated year time.
-		var melt := minf(snow_water_m, forcing.temperature_c * 3.0 / 1000 / 86400 * dt)
 		snow_water_m -= melt
-		liquid += melt
 	liquid_m += liquid
+	forcing.precipitation_m_s = field.mean_precipitation_m_s
 	forcing.liquid_m_s = liquid / dt
+	forcing.liquid_field_m_s = rates
 	forcing.snow_water_m = snow_water_m
 	elapsed_s += dt
 	return forcing
@@ -95,7 +105,8 @@ func toggle(raining: bool) -> void:
 
 func snapshot() -> Dictionary:
 	return {
-		"version": 1,
+		"version": 2,
+		"cloud_configuration": clouds.configuration(),
 		"seed": settings.seed,
 		"elapsed_s": elapsed_s,
 		"snow_water_m": snow_water_m,
@@ -107,7 +118,13 @@ func snapshot() -> Dictionary:
 
 
 func restore(state: Dictionary) -> bool:
-	if state.get("version") != 1 or state.get("seed") != settings.seed:
+	if (
+		state.get("version") not in [1, 2]
+		or state.get("seed") != settings.seed
+		or (
+			state.get("version") == 2 and state.get("cloud_configuration") != clouds.configuration()
+		)
+	):
 		return false
 	for field in ["elapsed_s", "snow_water_m", "precipitation_m", "liquid_m", "forced_until_s"]:
 		if not (state.get(field) is float or state.get(field) is int):

@@ -1,5 +1,7 @@
 shader_type spatial;
 uniform float rainfall = 0.0;
+uniform sampler2D rain_mask : filter_linear, repeat_disable;
+uniform bool spatial_rain = false;
 uniform float weather_time = 0.0;
 render_mode cull_disabled;
 varying vec3 world_pos;
@@ -112,7 +114,9 @@ void fragment() {
 	vec2 slope = coarse.xy*weights.x + transpose(rotation)*medium.xy*weights.y
 		+ transpose(rotation*rotation)*fine.xy*weights.z;
 	vec3 rain = vec3(0);
-	float rain_visibility = rainfall * (1.0-smoothstep(.035,.14,footprint));
+	float local_rain = rainfall;
+	if (spatial_rain) { local_rain *= texture(rain_mask, p / world_extent).r; }
+	float rain_visibility = local_rain * (1.0-smoothstep(.035,.14,footprint));
 	if (rain_visibility > .001) { rain = rain_detail(p, footprint) * rain_visibility; }
 	float glint = smoothstep(.45,.85,ripple);
 	// Soft mineral/vegetal palette shared with the banks; water is not metal.

@@ -25,7 +25,7 @@ var shadow_filter_quality: int = ProjectSettings.get_setting(
 )
 
 
-func configure(world_extent_m := 0.0) -> void:
+func configure(world_extent_m := 0.0, clouds: ForestCloudField = null) -> void:
 	set_shadow_filter_quality(shadow_filter_quality)
 	environment = world_env
 	world_env.background_mode = Environment.BG_SKY
@@ -80,7 +80,7 @@ func configure(world_extent_m := 0.0) -> void:
 	if world_extent_m > 0:
 		cloud_deck = preload("res://scripts/cloud_deck.gd").new()
 		add_child(cloud_deck)
-		cloud_deck.configure(world_extent_m)
+		cloud_deck.configure(world_extent_m, clouds)
 
 
 func set_shadow_filter_quality(quality: int) -> void:
@@ -105,20 +105,21 @@ func set_season(climate: Dictionary) -> void:
 	cloud_cover = climate.get("cloud_cover", .18)
 	wind_m_s = climate.get("wind_m_s", 2.0)
 	raining = climate.get("rain_fraction", 0.0) > .01
-	var precip: float = climate.get("precipitation_m_s", 0.0)
+	var precip: float = climate.get(
+		"precipitation_potential_m_s", climate.get("precipitation_m_s", 0.0)
+	)
 	var snowing: bool = climate.temperature_c <= 0 and precip > 1e-9
 	rain_particles.emitting = raining or snowing
 	rain_particles.amount_ratio = maxf(.03, precip * 1000 * 3600 / 30.0)
 	rain_particles.draw_pass_1 = snow_flake if snowing else rain_drop
 	if rain_particles.process_material != null:
-		rain_particles.process_material.initial_velocity_min = 1.5 if snowing else 18.0
-		rain_particles.process_material.initial_velocity_max = 2.5 if snowing else 24.0
+		rain_particles.process_material.set_shader_parameter("fall_speed", 2.0 if snowing else 21.0)
 	world_env.fog_density = lerpf(.00065, .0025, cloud_cover)
 	world_env.volumetric_fog_density = lerpf(.0035, .006, cloud_cover)
 	if rain_particles.process_material != null:
 		var wind: Vector2 = climate.get("wind_direction", Vector2.RIGHT) * wind_m_s
-		rain_particles.process_material.direction = (
-			Vector3(wind.x * .04, -1, wind.y * .04).normalized()
+		rain_particles.process_material.set_shader_parameter(
+			"fall_direction", Vector3(wind.x * .04, -1, wind.y * .04).normalized()
 		)
 	displayed_day = climate.day
 	displayed_hour = climate.hour
@@ -152,19 +153,18 @@ func attach_observer(camera: Camera3D) -> void:
 	rain_particles.lifetime = 1.4
 	rain_particles.visibility_aabb = AABB(Vector3(-35, -30, -35), Vector3(70, 60, 70))
 	rain_particles.emitting = false
-	var motion := ParticleProcessMaterial.new()
-	motion.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	motion.emission_box_extents = Vector3(22, 12, 22)
-	motion.direction = Vector3(.1, -1, .05)
-	motion.spread = 3
-	motion.initial_velocity_min = 18
-	motion.initial_velocity_max = 24
-	motion.gravity = Vector3.ZERO
+	var motion := ShaderMaterial.new()
+	motion.shader = preload("res://shaders/precipitation.gdshader")
+	if cloud_deck != null:
+		motion.set_shader_parameter("rain_mask", cloud_deck.rain_mask)
+		motion.set_shader_parameter("world_extent", cloud_deck.extent)
+		motion.set_shader_parameter("spatial_rain", true)
 	rain_particles.process_material = motion
 	rain_drop.size = Vector2(.025, .7)
 	snow_flake.size = Vector2(.09, .09)
 	var material := StandardMaterial3D.new()
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.vertex_color_use_as_albedo = true
 	material.albedo_color = Color(.7, .83, .87, .32)
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED

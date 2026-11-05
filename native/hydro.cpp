@@ -97,20 +97,34 @@ std::vector<double> Hydro::withdraw_roots(const std::vector<double> &demand_m) {
     }
     return taken;
 }
-double Hydro::stable_step() const {
+double Hydro::stable_step(double maximum_rain_m_s) const {
     // Local-inertial wave CFL. Source/rain increment also bounds a dry start.
     double hmax = *std::max_element(depth.begin(), depth.end());
-    hmax += p.max_step_s * (p.rain_m_s + p.source_m3_s * max_source_fraction / (dx*dx));
+    hmax += p.max_step_s * (maximum_rain_m_s + p.source_m3_s * max_source_fraction / (dx*dx));
     return std::min(p.max_step_s, p.cfl * dx / std::sqrt(g * std::max(hmax, dry)));
 }
 bool Hydro::advance(double duration_s, bool rain) {
+    return advance_impl(duration_s,rain,nullptr,p.rain_m_s,0);
+}
+bool Hydro::advance_field(double duration_s,const std::vector<double> &rates) {
+    if (rates.size()!=depth.size() || n==0) return false;
+    double maximum=0, sum=0;
+    for(double value:rates) {
+        if(!std::isfinite(value) || value<0) return false;
+        maximum=std::max(maximum,value); sum+=value;
+    }
+    if(!std::isfinite(sum*dx*dx)) return false;
+    return advance_impl(duration_s,false,&rates,maximum,sum*dx*dx);
+}
+bool Hydro::advance_impl(double duration_s,bool rain,const std::vector<double> *rates,
+                         double maximum_rain_m_s,double grid_input_m3_s) {
     if (n == 0 || !std::isfinite(duration_s) || duration_s < 0) return false;
     double left = duration_s;
     while (left > 0) {
         const double soil_left = p.soil_interval_s - soil_elapsed_s;
-        double dt = std::min({left, stable_step(), soil_left});
+        double dt = std::min({left, stable_step(maximum_rain_m_s), soil_left});
         if (!(dt > 0)) return false;
-        water_step(dt, rain);
+        water_step(dt, rain, rates, grid_input_m3_s);
         left = std::max(0.0, left - dt);
         time_s += dt; soil_elapsed_s += dt; ++water_steps;
         if (soil_elapsed_s >= p.soil_interval_s - 1e-10) {
@@ -141,21 +155,21 @@ double Hydro::face_flux(int a, int b, double crest, double previous, double neig
     if(std::abs(q)>bound) { q=std::copysign(bound,q); ++froude_limited_faces; }
     return q;
 }
-void Hydro::water_step(double dt, bool rain) {
+void Hydro::water_step(double dt, bool rain, const std::vector<double> *rates, double grid_input_m3_s) {
     const double area = dx*dx;
     const double rain_h = rain ? p.rain_m_s * dt : 0;
     const double spring = p.source_m3_s * dt;
     if (source_weight_sum > 0)
         for (std::size_t i = 0; i < sources.size(); ++i)
             depth[sources[i]] += spring * (source_weights[i] / source_weight_sum) / area;
-    input_m3 += spring + rain_h * depth.size() * area;
+    input_m3 += spring + (rates ? grid_input_m3_s * dt : rain_h * depth.size() * area);
     const double cap = p.porosity * p.top_m;
     std::fill(outgoing.begin(), outgoing.end(), 0);
     std::fill(delta.begin(), delta.end(), 0);
     std::fill(outlet_flux.begin(), outlet_flux.end(), 0);
     old_x=qx; old_z=qz;
     for (std::size_t k = 0; k < depth.size(); ++k) {
-        depth[k] += rain_h;
+        depth[k] += rates ? (*rates)[k] * dt : rain_h;
         // Cheap surface exchange every water step, with explicit reserved storage.
         // Column redistribution/evaporation is on the slower, aligned soil clock.
         const double soak = std::min({depth[k], p.conductivity_m_s * dt,
