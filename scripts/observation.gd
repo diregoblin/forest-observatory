@@ -191,17 +191,28 @@ static func _shape_distance(
 	var leaves: float = shape.get("leaves", 1.0)
 	var closest := maximum
 	var found := false
+	var deform: Callable = shape.get("deform_vertex", Callable())
+	var prepare: Callable = shape.get("prepare_deform", Callable())
+	if prepare.is_valid():
+		deform = prepare.call()
 	for j in range(0, vertices.size(), 3):
 		if foliage.size() > j / 3 and foliage[j / 3] == 1 and leaves < .001:
 			continue
+		var a := vertices[j]
+		var b := vertices[j + 1]
+		var c := vertices[j + 2]
+		if deform.is_valid():
+			a = deform.call(a)
+			b = deform.call(b)
+			c = deform.call(c)
 		var point: Variant = Geometry3D.ray_intersects_triangle(
-			local_origin, local_direction, vertices[j], vertices[j + 1], vertices[j + 2]
+			local_origin, local_direction, a, b, c
 		)
 		if point is Vector3:
 			var triangle_accept: Callable = shape.get("accept_triangle_hit", Callable())
 			if triangle_accept.is_valid():
 				var uvs: PackedVector3Array = shape.uvs
-				var bary := _barycentric(point, vertices[j], vertices[j + 1], vertices[j + 2])
+				var bary := _barycentric(point, a, b, c)
 				var value: Vector3 = uvs[j] * bary.x + uvs[j + 1] * bary.y + uvs[j + 2] * bary.z
 				if not triangle_accept.call(Vector2(value.x, value.y), value.z > .5):
 					continue

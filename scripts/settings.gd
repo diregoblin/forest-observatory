@@ -23,6 +23,9 @@ extends Resource
 @export var soil_interval_s := 30.0
 @export var soil_profile: ForestSoilProfile = preload("res://data/soils/loam.tres")
 @export var evaporation_m_s := 0.12 / 1000.0 / 3600.0
+@export var wind_resolution := 32  # Presentation velocity grid; cell-centred.
+@export var wind_shelter_resolution := 64  # Submitted crown obstruction grid.
+@export var wind_display_interval_s := .1
 @export var water_display_interval_s := 0.1  # Wall time; never a physics coefficient.
 @export var dam_fraction := .61
 @export var dam_width := 44.0
@@ -71,6 +74,9 @@ func validate() -> void:
 	assert(spring_fraction.x > 0 and spring_fraction.x < 1)
 	assert(spring_fraction.y > 0 and spring_fraction.y < spring_mouth_fraction)
 	assert(spring_mouth_fraction < 1 and ravine_depth_m > 0 and ravine_half_width_m > 0)
+	assert(wind_resolution >= 8 and wind_resolution <= 128)
+	assert(wind_shelter_resolution >= 8 and wind_shelter_resolution <= 256)
+	assert(wind_display_interval_s > 0 and wind_display_interval_s <= .5)
 	assert(soil_interval_s > 0 and water_display_interval_s > 0)
 	soil_profile.validate()
 	assert(ecology_interval > 0 and growth_per_tick > 0)

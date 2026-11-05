@@ -101,6 +101,7 @@ func _process(_dt: float) -> void:
 		water_view.material_override.get_shader_parameter("previous_depth_map")
 	)
 	_parameter("display_alpha", water_view.material_override.get_shader_parameter("display_alpha"))
+	vegetation.wind.apply(material)
 	_parameter("weather_time", vegetation.wind_time_s)
 	_parameter("weather_wind", vegetation.wind_strength_display)
 	_parameter("weather_direction", vegetation.wind_direction_display)

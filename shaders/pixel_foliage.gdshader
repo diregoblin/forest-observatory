@@ -7,9 +7,7 @@ render_mode cull_disabled;
 // All species share this material path; no biological state is invented here.
 uniform vec4 base_color : source_color = vec4(.15, .27, .13, 1);
 uniform float wind_strength = .08;
-uniform float weather_wind = 1.0;
-uniform vec2 weather_direction = vec2(1.0, 0.0);
-uniform float weather_time = 0.0;
+#include "res://shaders/forest_wind.gdshaderinc"
 uniform float snow_load = 0.0;
 uniform float bloom_fraction = 0.0;
 varying float component_tag;
@@ -38,12 +36,8 @@ void vertex() {
 		VERTEX *= .15 + biomass;
 		COLOR.rgb *= mix(vec3(.66, .53, .31), vec3(1, 1, .85), biomass);
 	}
-	float sway = sin(weather_time * .9 + p.x * .05 + p.z * .075)
-		+ .4 * sin(weather_time * 1.7 + p.x * .14);
-	vec2 local_wind = vec2(dot(normalize(MODEL_MATRIX[0].xz), weather_direction), dot(normalize(MODEL_MATRIX[2].xz), weather_direction));
 	float alive_wind = tree_enabled ? clamp(tree_state.a, 0.0, 1.0) : 1.0;
-	vec2 bend = local_wind * sway * pow(max(VERTEX.y,0.0),1.2) * wind_strength * weather_wind * alive_wind;
-	VERTEX.xz += bend;
+	VERTEX = forest_wind_vertex(VERTEX, MODEL_MATRIX, wind_strength, alive_wind);
 }
 
 void fragment() {

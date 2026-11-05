@@ -29,6 +29,7 @@ var vegetation := ForestVegetation.new()
 var water_view := ForestWaterView.new()
 var turf_cards = preload("res://scripts/turf_cards.gd").new()
 var atmosphere := ForestAtmosphere.new()
+var wind_audio := ForestWindAudio.new()
 var painterly_style = preload("res://scripts/painterly_style.gd").new()
 var hud := ForestHud.new()
 var soil_layer_visibility := {}
@@ -118,6 +119,9 @@ func _ready() -> void:
 	vegetation.observer = camera
 	vegetation.build(land, water, groundcover, trees, terrain.data.get_surface_height)
 	vegetation.refresh_trees(_display_climate())
+	vegetation.wind.flush_shelter()
+	add_child(wind_audio)
+	wind_audio.configure(vegetation.wind, camera, terrain.data.get_surface_height)
 	add_child(fungi_view)
 	fungi_view.configure(fungi)
 	add_child(animals_view)
@@ -280,6 +284,7 @@ func _ready() -> void:
 func _process(dt: float) -> void:
 	var frame_started := Time.get_ticks_usec()
 	vegetation.advance_weather(0.0 if paused else dt)
+	wind_audio.update(dt, paused)
 	habitat_view.advance_display()
 	total_wall += dt
 	if not paused:

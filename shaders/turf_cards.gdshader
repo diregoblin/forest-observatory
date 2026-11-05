@@ -13,9 +13,7 @@ uniform float ecology_blend = 1.0;
 uniform float ecology_extent = 512.0;
 uniform float ground_greenness = .85;
 uniform float snow_water_m = 0.0;
-uniform float weather_time = 0.0;
-uniform float weather_wind = 1.0;
-uniform vec2 weather_direction = vec2(1,0);
+#include "res://shaders/forest_wind.gdshaderinc"
 uniform int presentation_style = 0;
 uniform float view_distance = 36.0;
 uniform float mid_distance = 20.0;
@@ -57,9 +55,7 @@ void vertex() {
 	VERTEX *= step(INSTANCE_CUSTOM.r, turf);
 	VERTEX.y = VERTEX.y * grass_detail - .06 * (1.0 - grass_detail);
 	NORMAL = normalize(mix(vec3(0,1,0),NORMAL,grass_detail));
-	float sway = sin(weather_time*.9 + origin.x*.05 + origin.z*.075);
-	vec2 local_wind = vec2(dot(normalize(MODEL_MATRIX[0].xz),weather_direction),dot(normalize(MODEL_MATRIX[2].xz),weather_direction));
-	VERTEX.xz += local_wind * sway * pow(max(VERTEX.y,0.0),1.2) * .12 * weather_wind;
+	VERTEX = forest_wind_vertex(VERTEX, MODEL_MATRIX, .12, 1.0);
 }
 
 void fragment() {

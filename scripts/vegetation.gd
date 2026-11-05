@@ -33,6 +33,7 @@ var impostor_manifest := {}
 var mid_groups := {}
 var mid_geometry := {}
 var observer: Camera3D
+var wind := ForestWindField.new()
 var wind_time_s := 0.0
 var wind_strength_display := 1.0
 var wind_strength_target := 1.0
@@ -52,6 +53,7 @@ func build(
 	groundcover = plants
 	trees = model
 	var settings := land.settings
+	wind.configure(settings)
 	rng.seed = land.settings.seed + 71
 	var manifest_path := "res://art/plant-impostors/manifest.json"
 	if FileAccess.file_exists(manifest_path):
@@ -106,6 +108,7 @@ func build(
 
 
 func _rebuild_membership() -> void:
+	wind.clear_canopy()
 	material_revision += 1
 	for node in tree_groups.values():
 		node.queue_free()
@@ -254,7 +257,9 @@ func _create_impostor(species: int, key: Vector3i, near: MultiMeshInstance3D) ->
 		mat.set_shader_parameter("autumn_color", definition.autumn_color)
 		mat.set_shader_parameter("center_y", record.center_y)
 		mat.set_shader_parameter("canopy_enabled", definition.canopy_layers > 0)
-		mat.set_shader_parameter("botanical_cards", definition.modules.any(func(m): return m.shape != "mesh"))
+		mat.set_shader_parameter(
+			"botanical_cards", definition.modules.any(func(m): return m.shape != "mesh")
+		)
 		impostor_assets[species] = {
 			"mesh": quad, "material": mat, "images": images, "center_y": record.center_y
 		}
@@ -324,6 +329,7 @@ func _instance_group(
 	mat.set_shader_parameter("base_color", tint)
 	mat.set_shader_parameter("wind_strength", wind)
 	mat.set_shader_parameter("tree_enabled", tree_enabled)
+	self.wind.apply(mat)
 	node.material_override = mat
 	node.extra_cull_margin = 3
 	add_child(node)
@@ -424,10 +430,28 @@ func _submit(
 		"updated_at": display_elapsed
 	}
 
+	var canopy_scale := submitted.basis.y.length()
+	if d.growth_form in [&"tree", &"shrub"]:
+		wind.submit_canopy(
+			i,
+			Vector2(submitted.origin.x, submitted.origin.z),
+			d.crown_radius_m * canopy_scale,
+			d.reference_height_m * canopy_scale,
+			0.0 if trees.fallen[i] else (.15 + .85 * state.r)
+		)
+
 
 func selection_shape(id: int) -> Dictionary:
 	# Pick exactly the last submitted MultiMesh state, never future model growth.
-	var shape: Dictionary = displayed_shapes.get(id, {})
+	var shape: Dictionary = displayed_shapes.get(id, {}).duplicate()
+	if not shape.is_empty():
+		shape.bounds = shape.bounds.grow(ForestWindField.MAX_BEND_M)
+		var material: ShaderMaterial = tree_materials[member_groups[id].x]
+		shape["prepare_deform"] = wind.deformer.bind(
+			shape.transform,
+			material.get_shader_parameter("wind_strength"),
+			clampf(batch_for(id).multimesh.get_instance_custom_data(member_slots[id]).a, 0, 1)
+		)
 	if shape.is_empty() or observer == null or not impostor_groups.has(member_groups[id]):
 		return shape
 	var key := member_groups[id]
@@ -443,7 +467,9 @@ func selection_shape(id: int) -> Dictionary:
 		result.faces = geometry.faces
 		result.foliage = geometry.foliage
 		result.uvs = geometry.uvs
-		result.bounds = global_transform * shape.transform * geometry.bounds
+		result.bounds = (global_transform * shape.transform * geometry.bounds).grow(
+			ForestWindField.MAX_BEND_M
+		)
 		return result
 	if distance > impostor_groups[key].visibility_range_end:
 		return {}
@@ -508,7 +534,9 @@ func advance_weather(dt: float) -> void:
 	var weight := 1.0 - exp(-dt / .35)
 	wind_strength_display = lerpf(wind_strength_display, wind_strength_target, weight)
 	wind_direction_display = wind_direction_display.lerp(wind_direction_target, weight)
+	wind.advance(dt, wind_direction_display * wind_strength_display * 3.0)
 	for mat in tree_materials.values():
+		wind.apply(mat)
 		mat.set_shader_parameter("weather_time", wind_time_s)
 		mat.set_shader_parameter("weather_wind", wind_strength_display)
 		mat.set_shader_parameter("weather_direction", wind_direction_display)
