@@ -162,6 +162,12 @@ func _run() -> void:
 	var before := wind.elapsed_s
 	# Real worker-busy early return, with models deliberately inaccessible to
 	# the vegetation view. Wind and audio may read only committed display state.
+	var tree_id := 0
+	while scene.settings.plants[scene.trees.species[tree_id]].growth_form != &"tree":
+		tree_id += 1
+	var from: Transform3D = scene.vegetation.displayed_shapes[tree_id].transform
+	var to := Transform3D(Basis(Vector3.FORWARD, 1.2) * from.basis, from.origin)
+	scene.vegetation.treefall.begin(tree_id, from, to, Color(1, 1, 0, 0), 12)
 	scene.paused = false
 	scene.use_model_worker = true
 	scene.model_work_active = true
@@ -172,6 +178,20 @@ func _run() -> void:
 		scene._process(.04)
 		assert(scene.model_work_active)
 	assert(absf(wind.elapsed_s - before - .12) < .000001)
+	assert(is_equal_approx(scene.vegetation.treefall.events[tree_id].elapsed, .12))
+	assert(scene.vegetation.displayed_shapes[tree_id].transform != from)
+	assert(
+		(
+			scene.water_view.material_override.get_shader_parameter("wind_current")
+			== wind.current_texture
+		)
+	)
+	assert(
+		is_equal_approx(
+			scene.water_view.material_override.get_shader_parameter("ripple_time_s"), wind.elapsed_s
+		)
+	)
+	result.treefall_and_ripples_busy_detached = true
 	var ear: Vector3 = scene.camera.global_position
 	var ground: float = scene.terrain.data.get_surface_height(ear)
 	var expected_speed := wind.sample_at(Vector2(ear.x, ear.z), maxf(0, ear.y - ground)).length()

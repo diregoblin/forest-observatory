@@ -4,6 +4,9 @@ extends RefCounted
 var settings: ForestSettings
 var noise := FastNoiseLite.new()
 var habitat_noise := FastNoiseLite.new()
+var ravine_head_floor := 0.0
+var ravine_mouth_floor := 0.0
+var ravine_branches: Array[Vector4] = []
 
 
 func _init(config: ForestSettings) -> void:
@@ -14,6 +17,25 @@ func _init(config: ForestSettings) -> void:
 	habitat_noise.seed = settings.seed + 2153
 	habitat_noise.frequency = 3.8 / settings.extent
 	habitat_noise.fractal_octaves = 2
+	var head := spring_position()
+	var mouth := spring_mouth()
+	ravine_mouth_floor = _base_height(mouth.x, mouth.y)
+	ravine_head_floor = minf(
+		_base_height(head.x, head.y) - 4.25,
+		maxf(
+			_base_height(head.x, head.y) - settings.ravine_depth_m,
+			ravine_mouth_floor + settings.spring_min_drop_m
+		)
+	)
+	# Passive side incisions: head z, confluence z, signed head offset, width.
+	var reach := mouth.y - head.y
+	ravine_branches.assign(
+		[
+			Vector4(head.y + reach * .02, head.y + reach * .38, -settings.extent * .055, 6),
+			Vector4(head.y + reach * .30, head.y + reach * .70, settings.extent * .065, 8),
+			Vector4(head.y + reach * .53, head.y + reach * .89, -settings.extent * .045, 7)
+		]
+	)
 
 
 func habitat_at(x: float, z: float) -> Vector4:
@@ -69,20 +91,59 @@ func height_at(x: float, z: float) -> float:
 		return base
 	var head := spring_position()
 	var mouth := spring_mouth()
-	if z < head.y - 12.0 or z > mouth.y + 12.0:
+	if z < head.y - 9 or z > mouth.y + 14:
 		return base
 	var t := clampf((z - head.y) / (mouth.y - head.y), 0, 1)
-	var cross := absf(x - ravine_x(z))
-	if cross >= settings.ravine_half_width_m:
+	var signed_cross := x - ravine_x(z)
+	var half_width := settings.ravine_half_width_m * lerpf(.65, 1.65, t)
+	half_width *= (
+		1
+		+ .13 * sin(t * TAU * 2.3)
+		+ (.20 * sin(t * TAU * 1.7 + .6) if signed_cross > 0 else -.12 * cos(t * TAU * 2.1))
+	)
+	var floor_height := ravine_floor(t)
+	var gate := smoothstep(head.y - 8, head.y, z) * (1 - smoothstep(mouth.y, mouth.y + 14, z))
+	var result := _incise(
+		base, floor_height, absf(signed_cross), half_width, lerpf(3.2, 4.2, t), gate
+	)
+	for branch in ravine_branches:
+		if z < branch.x - 4 or z > branch.y:
+			continue
+		var u := clampf((z - branch.x) / (branch.y - branch.x), 0, 1)
+		var join_t := (branch.y - head.y) / (mouth.y - head.y)
+		var join_floor := ravine_floor(join_t)
+		var source_x := ravine_x(branch.x) + branch.z
+		var source_floor := _base_height(source_x, branch.x) - 1.5
+		var branch_x := lerpf(source_x, ravine_x(branch.y), u) + signf(branch.z) * 2 * sin(PI * u)
+		var branch_floor := lerpf(maxf(source_floor, join_floor + 3), join_floor, u)
+		var branch_gate := smoothstep(branch.x - 4, branch.x + 7, z)
+		result = minf(
+			result,
+			_incise(
+				base, branch_floor, absf(x - branch_x), branch.w * lerpf(.45, 1, u), .6, branch_gate
+			)
+		)
+	return result
+
+
+func ravine_floor(t: float) -> float:
+	# A steeper upper reach relaxes into the receiving valley; bounded riffles
+	# leave the thalweg continuously downhill at the configured model scale.
+	return (
+		ravine_mouth_floor
+		+ (ravine_head_floor - ravine_mouth_floor) * pow(1 - t, 1.35)
+		+ .12 * sin(t * TAU * 4) * t * (1 - t)
+	)
+
+
+static func _incise(
+	base: float, floor_height: float, cross: float, width: float, bottom: float, gate: float
+) -> float:
+	if cross >= width or floor_height >= base:
 		return base
-	var head_floor := _base_height(head.x, head.y) - settings.ravine_depth_m
-	var mouth_floor := _base_height(mouth.x, mouth.y)
-	var floor_height := lerpf(head_floor, mouth_floor, t)
-	var cut := 1.0 - smoothstep(2.0, settings.ravine_half_width_m, cross)
-	cut *= smoothstep(head.y - 12.0, head.y, z)
-	cut *= 1.0 - smoothstep(mouth.y, mouth.y + 12.0, z)
-	# The shared landscape changes the actual solver bed, not a decorative mesh.
-	return minf(base, lerpf(base, floor_height, cut))
+	var q := clampf((cross - bottom) / maxf(.1, width - bottom), 0, 1)
+	var profile := .65 * q + .35 * q * q
+	return lerpf(base, lerpf(floor_height, base, profile), gate)
 
 
 func spring_position() -> Vector2:
@@ -98,7 +159,10 @@ func ravine_x(z: float) -> float:
 	var head := spring_position()
 	var mouth := spring_mouth()
 	var t := clampf((z - head.y) / (mouth.y - head.y), 0, 1)
-	return lerpf(head.x, mouth.x, t) - settings.extent * .012 * sin(PI * t)
+	return (
+		lerpf(head.x, mouth.x, t)
+		+ settings.extent * sin(PI * t) * (-.012 + .010 * sin(t * TAU * 1.8 + .4))
+	)
 
 
 func initial_spring_depth(x: float, z: float) -> float:
@@ -122,7 +186,13 @@ func ground_color(x: float, z: float) -> Color:
 	var n := (noise.get_noise_2d(x * 2.0, z * 2.0) + 1.0) * 0.5
 	var grass := Color(0.31, 0.38, 0.19).lerp(Color(0.47, 0.47, 0.29), n)
 	var earth := Color(0.31, 0.29, 0.21)
-	return earth.lerp(grass, smoothstep(7.0, 19.0, d))
+	var color := earth.lerp(grass, smoothstep(7.0, 19.0, d))
+	if settings.spring_enabled:
+		var incision := maxf(0, _base_height(x, z) - height_at(x, z))
+		var bare := smoothstep(1.4, 4.5, incision) * (.65 + .35 * n)
+		var bank_earth := Color(.40, .33, .23).lerp(Color(.27, .25, .19), n)
+		color = color.lerp(bank_earth, bare * .85)
+	return color
 
 
 func channel_barrier() -> ForestBarrier:
@@ -135,3 +205,23 @@ func channel_barrier() -> ForestBarrier:
 	barrier.end = Vector2(x + settings.dam_width / 2, z)
 	barrier.crest = height_at(x, z) + settings.dam_height
 	return barrier
+
+
+func watercourse_distance(x: float, z: float) -> float:
+	var distance := absf(x - channel_x(z))
+	if settings.spring_enabled and z >= spring_position().y - 2 and z <= spring_mouth().y:
+		distance = minf(distance, absf(x - ravine_x(z)))
+	return distance
+
+
+func bank_exposure(x: float, z: float) -> float:
+	var incision := maxf(0, _base_height(x, z) - height_at(x, z))
+	if incision < .5:
+		return 0
+	var gradient := (
+		Vector2(
+			height_at(x + 1, z) - height_at(x - 1, z), height_at(x, z + 1) - height_at(x, z - 1)
+		)
+		* .5
+	)
+	return smoothstep(.5, 2.5, incision) * smoothstep(.3, .85, gradient.length())

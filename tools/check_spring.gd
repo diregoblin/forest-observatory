@@ -16,7 +16,19 @@ func _run() -> void:
 	control_config.spring_enabled = false
 	var old_land := ForestLandscape.new(control_config)
 	assert(old_land.height_at(head.x, head.y) - land.height_at(head.x, head.y) > 4)
-	assert(land.height_at(head.x, head.y) > land.height_at(mouth.x, mouth.y))
+	assert(
+		(
+			land.height_at(head.x, head.y) - land.height_at(mouth.x, mouth.y)
+			>= config.spring_min_drop_m - .001
+		)
+	)
+	assert(land.height_at(head.x, head.y) - land.height_at(land.channel_x(head.y), head.y) > 8)
+	var previous := INF
+	for sample_index in 101:
+		var z := lerpf(head.y, mouth.y, sample_index / 100.0)
+		var floor_height := land.height_at(land.ravine_x(z), z)
+		assert(floor_height <= previous + .0001, "Thalweg must descend continuously")
+		previous = floor_height
 	# A point well outside the trench must keep its exact pre-existing terrain.
 	assert(land.height_at(400, 420) == old_land.height_at(400, 420))
 	# Renderer and native bed receive the same analytical landscape, not a decal.

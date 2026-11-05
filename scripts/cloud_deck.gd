@@ -17,6 +17,7 @@ var rain_mask: ImageTexture
 var liquid_rain_mask: ImageTexture
 var cloud_offset := Vector2.ZERO
 var cover_texture: ImageTexture
+var air_texture: ImageTexture
 
 
 func configure(world_extent: float, source: ForestCloudField = null) -> void:
@@ -42,6 +43,11 @@ func configure(world_extent: float, source: ForestCloudField = null) -> void:
 	)
 	cover_image.fill(Color(.18, 0, 0))
 	cover_texture = ImageTexture.create_from_image(cover_image)
+	var air := Image.create(
+		cover_image.get_width(), cover_image.get_height(), false, Image.FORMAT_RGBF
+	)
+	air.fill(Color(.5, 15, 2))
+	air_texture = ImageTexture.create_from_image(air)
 	height = extent * .5
 	position = Vector3(extent * .5, height, extent * .5)
 	var plane := PlaneMesh.new()
@@ -85,6 +91,17 @@ func submit(climate: Dictionary, sun_direction: Vector3) -> void:
 			field.render_target_update_mode = SubViewport.UPDATE_ONCE
 	var fields := ForestWeatherFront.grid(climate, extent)
 	cover_texture.update(ForestFieldTexture.image(fields.cloud_cover, fields.resolution))
+	var air := PackedFloat32Array()
+	air.resize(fields.resolution * fields.resolution * 3)
+	for i in fields.temperature_c.size():
+		air[3 * i] = fields.relative_humidity[i]
+		air[3 * i + 1] = fields.temperature_c[i]
+		air[3 * i + 2] = Vector2(fields.wind_x[i], fields.wind_z[i]).length()
+	air_texture.update(
+		Image.create_from_data(
+			fields.resolution, fields.resolution, false, Image.FORMAT_RGBF, air.to_byte_array()
+		)
+	)
 	field_material.set_shader_parameter("spatial_weather", climate.has("front_extent_m"))
 	field_material.set_shader_parameter("cloud_cover", climate.get("cloud_cover", .18))
 	shadow_material.set_shader_parameter("spatial_weather", climate.has("front_extent_m"))

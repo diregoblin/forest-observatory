@@ -1,4 +1,7 @@
 shader_type spatial;
+#include "res://shaders/wind_velocity.gdshaderinc"
+uniform vec2 ripple_offset_m = vec2(0);
+uniform float ripple_time_s = 0.0;
 uniform float rainfall = 0.0;
 uniform sampler2D rain_mask : filter_linear, repeat_disable;
 uniform bool spatial_rain = false;
@@ -101,18 +104,27 @@ void fragment() {
 	float footprint = max(length(dFdx(p)), length(dFdy(p)));
 	// Advected, rotated noise gradients instead of infinite sine wave fronts.
 	// Three unequal scales prevent either parallel bands or a square lattice.
+	vec2 velocity = forest_spatial_wind_velocity(world_pos,.1);
+	float speed = length(velocity);
+	vec2 direction = speed > .01 ? velocity/speed : vec2(1,0);
+	vec2 across = vec2(-direction.y,direction.x);
+	vec2 advected = p-ripple_offset_m*.18;
+	// Longer crests across local wind; travelling gusts modulate their strength.
+	p = vec2(dot(advected,direction)*1.5,dot(advected,across)*.65);
+	float amplitude = .08+.92*smoothstep(.1,8.0,speed);
 	mat2 rotation = mat2(vec2(.8,.6),vec2(-.6,.8));
-	vec3 coarse = water_field(p*.65 + weather_time*vec2(.17,-.12));
+	vec3 coarse = water_field(p*.65 + ripple_time_s*vec2(.17,-.12));
 	vec3 medium = water_field(rotation*p*1.31 + vec2(29.4,-13.7)
-		+ weather_time*vec2(-.11,.15));
+		+ ripple_time_s*vec2(-.11,.15));
 	vec3 fine = water_field(rotation*rotation*p*2.73 + vec2(-7.6,41.3)
-		+ weather_time*vec2(.13,.08));
+		+ ripple_time_s*vec2(.13,.08));
 	// Fade frequencies as their cells approach the artistic pixel footprint.
 	vec3 resolved = vec3(1.0) - smoothstep(vec3(.25),vec3(.85),footprint*vec3(.65,1.31,2.73));
 	vec3 weights = vec3(.5,.32,.18) * resolved;
-	float ripple = dot(vec3(coarse.z,medium.z,fine.z)*2.0-1.0, weights);
-	vec2 slope = coarse.xy*weights.x + transpose(rotation)*medium.xy*weights.y
-		+ transpose(rotation*rotation)*fine.xy*weights.z;
+	float ripple = amplitude*dot(vec3(coarse.z,medium.z,fine.z)*2.0-1.0, weights);
+	vec2 wind_slope = (coarse.xy*weights.x + transpose(rotation)*medium.xy*weights.y
+		+ transpose(rotation*rotation)*fine.xy*weights.z)*amplitude;
+	vec2 slope = direction*wind_slope.x*1.5 + across*wind_slope.y*.65;
 	vec3 rain = vec3(0);
 	float local_rain = rainfall;
 	if (spatial_rain) { local_rain = texture(rain_mask, p / world_extent).r; }

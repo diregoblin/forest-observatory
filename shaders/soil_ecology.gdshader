@@ -52,6 +52,7 @@ uniform sampler2D turf_albedo_height : source_color, filter_linear_mipmap_anisot
 uniform sampler2D turf_normal_roughness_ao : filter_linear_mipmap_anisotropic, repeat_enable;
 uniform float turf_tile_m = 1.6;
 uniform float turf_normal_strength = 0.55;
+uniform sampler2D bank_exposure_map : filter_linear, repeat_disable;
 uniform sampler2D habitat_map : filter_linear, repeat_disable;
 uniform bool traffic_enabled = false;
 uniform sampler2D traffic_map : filter_linear;
@@ -577,13 +578,15 @@ void fragment() {
 		ALBEDO *= .985 + .015 * fine;
 		// 2. Living low-cover patches. Coverage reads the authoritative plants.
 		float grass_noise = .65 * surface_noise(v_vertex.xz * .8) + .35 * surface_noise(v_vertex.xz * 2.3 + vec2(17.2,39.8));
+		float bank_exposure = texture(bank_exposure_map,eco_uv).r;
 		float grass_mask = cover * (.45 + .55 * grass_noise);
 		grass_mask *= smoothstep(0.0, .04, cover);
 		// Fine unindividuated turf provides a continuous green visual ground.
 		// Named plants remain separate, finite and inspectable. Sand stays open.
 		float turf = dot(site.rgb, vec3(.48, .92, .98)) * (1.0 - site.a);
 		turf *= ground_greenness * (.72 + .28 * grass_noise);
-		grass_mask = max(grass_mask, turf);
+		grass_mask = max(grass_mask, turf)*(1.0-bank_exposure*.97);
+		ALBEDO = mix(ALBEDO,vec3(.34,.26,.17)*(.8+.2*fine),bank_exposure);
 		vec3 grass_tint = mix(vec3(.20,.32,.105), vec3(.31,.43,.16), .5 + .5 * fine);
 		if (turf_enabled) {
 			// World-locked periodic microtexture. Smooth warp breaks alignment

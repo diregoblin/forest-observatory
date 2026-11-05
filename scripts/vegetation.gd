@@ -34,6 +34,7 @@ var mid_groups := {}
 var mid_geometry := {}
 var observer: Camera3D
 var wind := ForestWindField.new()
+var treefall := preload("res://scripts/treefall_view.gd").new()
 var wind_time_s := 0.0
 var wind_strength_display := 1.0
 var wind_strength_target := 1.0
@@ -54,6 +55,8 @@ func build(
 	trees = model
 	var settings := land.settings
 	wind.configure(settings)
+	add_child(treefall)
+	treefall.configure(observer)
 	rng.seed = land.settings.seed + 71
 	var manifest_path := "res://art/plant-impostors/manifest.json"
 	if FileAccess.file_exists(manifest_path):
@@ -108,6 +111,7 @@ func build(
 
 
 func _rebuild_membership() -> void:
+	treefall.clear()
 	wind.clear_canopy()
 	material_revision += 1
 	for node in tree_groups.values():
@@ -405,8 +409,26 @@ func _submit(
 	var submitted := Transform3D(
 		Basis(Vector3.UP, trees.yaw[i]).scaled(Vector3.ONE * trees.size[i]), trees.positions[i]
 	)
+	var previous: Dictionary = displayed_shapes.get(i, {})
 	if trees.fallen[i]:
 		submitted = trees.fallen_transform(i)
+		if (
+			not previous.is_empty()
+			and not previous.get("fallen", true)
+			and d.growth_form == &"tree"
+		):
+			treefall.begin(
+				i,
+				previous.transform,
+				submitted,
+				node.multimesh.get_instance_custom_data(slot),
+				d.reference_height_m * trees.size[i]
+			)
+	if treefall.events.has(i):
+		var pose: Dictionary = treefall.pose(treefall.events[i])
+		submitted = pose.transform
+		state = pose.state
+		weight = 1.0
 	if weight < 1.0:
 		submitted = node.multimesh.get_instance_transform(slot).interpolate_with(submitted, weight)
 		state = node.multimesh.get_instance_custom_data(slot).lerp(state, weight)
@@ -421,6 +443,7 @@ func _submit(
 	_include_bounds(member_groups[i], submitted * geometry.bounds)
 	displayed_shapes[i] = {
 		"transform": submitted,
+		"fallen": bool(trees.fallen[i]),
 		"faces": geometry.faces,
 		"foliage": geometry.foliage,
 		"leaves": state.r,
@@ -479,11 +502,12 @@ func selection_shape(id: int) -> Dictionary:
 	var local_camera := submitted.basis.inverse() * to_camera
 	var angle := posmod(roundi(-atan2(local_camera.x, local_camera.z) / (PI / 2)), 4)
 	var scale := submitted.basis.y.length()
-	var right := Vector3(to_camera.z, 0, -to_camera.x).normalized()
+	var up := submitted.basis.y.normalized()
+	var right := up.cross(to_camera).normalized()
 	if right.is_zero_approx():
 		right = Vector3.RIGHT
-	var basis := Basis(right, Vector3.UP, right.cross(Vector3.UP)).scaled(Vector3.ONE * scale)
-	var pose := Transform3D(basis, submitted.origin + Vector3.UP * asset.center_y * scale)
+	var basis := Basis(right, up, right.cross(up)).scaled(Vector3.ONE * scale)
+	var pose := Transform3D(basis, submitted.origin + up * asset.center_y * scale)
 	return {
 		"transform": pose,
 		"bounds": pose * asset.mesh.get_aabb().grow(.001),
@@ -531,6 +555,9 @@ func advance_weather(dt: float) -> void:
 	# Wind sway is presentation, not biological time. Never freeze it while
 	# a worker owns the models, or advance it in half-second coupled-tick jumps.
 	# Real-time phase also avoids ×600 turning a breeze into a stroboscope.
+	var poses := treefall.advance(dt)
+	for id in poses:
+		_apply_fall_pose(id, poses[id])
 	wind_time_s += dt
 	var weight := 1.0 - exp(-dt / .35)
 	wind_strength_display = lerpf(wind_strength_display, wind_strength_target, weight)
@@ -547,3 +574,19 @@ func _canopy_hit(uv: Vector2, shell: bool, species: int) -> bool:
 	if not shell:
 		return true
 	return ForestPlantMeshBuilder.mask_hit(land.settings.plants[species], uv)
+
+
+func _apply_fall_pose(id: int, pose: Dictionary) -> void:
+	if not displayed_shapes.has(id):
+		return
+	var key: Vector3i = member_groups[id]
+	var slot: int = member_slots[id]
+	for groups in [tree_groups, mid_groups, impostor_groups]:
+		if groups.has(key):
+			groups[key].multimesh.set_instance_transform(slot, pose.transform)
+			groups[key].multimesh.set_instance_custom_data(slot, pose.state)
+	var shape: Dictionary = displayed_shapes[id]
+	shape.transform = pose.transform
+	shape.leaves = pose.state.r
+	shape.bounds = pose.transform * selection_geometry[key.x].bounds
+	_include_bounds(key, shape.bounds)

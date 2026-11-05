@@ -19,6 +19,8 @@ var displayed_hour := -1.0
 var cloud_deck
 var volumetric_enabled := true
 var diagnostic_enabled := false
+var lowland_fog: FogVolume
+var lowland_material: ShaderMaterial
 var shadow_filter_quality: int = ProjectSettings.get_setting(
 	"rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality",
 	RenderingServer.SHADOW_QUALITY_SOFT_ULTRA
@@ -133,6 +135,11 @@ func set_season(climate: Dictionary) -> void:
 	seasonal_energy = lerpf(.75, 1.35, warmth)
 	var height: float = sin(climate.sun_elevation)
 	var daylight := smoothstep(-.12, .18, height)
+	if lowland_material != null:
+		lowland_material.set_shader_parameter("night_factor", 1 - smoothstep(-.1, .45, height))
+		lowland_material.set_shader_parameter(
+			"drift_m", climate.get("cloud_offset_m", Vector2.ZERO) * .025
+		)
 	var twilight := (1.0 - smoothstep(0, .3, absf(height))) * daylight
 	sun.rotation = Vector3(-climate.sun_elevation, -climate.sun_azimuth, 0)
 	solar_energy = seasonal_energy * sqrt(maxf(0, height))
@@ -197,11 +204,15 @@ func set_cloud_shadows_enabled(value: bool) -> void:
 func set_volumetric_enabled(value: bool) -> void:
 	volumetric_enabled = value and RenderingServer.get_current_rendering_method() == "forward_plus"
 	world_env.volumetric_fog_enabled = volumetric_enabled and not diagnostic_enabled
+	if lowland_fog != null:
+		lowland_fog.visible = world_env.volumetric_fog_enabled
 
 
 func set_diagnostic_enabled(value: bool) -> void:
 	diagnostic_enabled = value
 	world_env.volumetric_fog_enabled = volumetric_enabled and not diagnostic_enabled
+	if lowland_fog != null:
+		lowland_fog.visible = world_env.volumetric_fog_enabled
 
 
 func set_cloud_style_enabled(value: bool) -> void:
@@ -229,3 +240,26 @@ func _sync_cloud_shadows() -> void:
 		if cloud_deck.visible
 		else 20.0
 	)
+
+
+func configure_ground(land: ForestLandscape, ground: Texture2D) -> void:
+	lowland_fog = FogVolume.new()
+	lowland_fog.size = Vector3(land.settings.extent, 180, land.settings.extent)
+	lowland_fog.position = Vector3(land.settings.extent * .5, 60, land.settings.extent * .5)
+	lowland_material = ShaderMaterial.new()
+	lowland_material.shader = preload("res://shaders/lowland_fog.gdshader")
+	lowland_material.set_shader_parameter("ground_map", ground)
+	lowland_material.set_shader_parameter("air_map", cloud_deck.air_texture)
+	lowland_material.set_shader_parameter("world_extent", land.settings.extent)
+	lowland_material.set_shader_parameter(
+		"lowland_level",
+		land.height_at(land.channel_x(land.settings.extent * .5), land.settings.extent * .5) + 12
+	)
+	lowland_fog.material = lowland_material
+	add_child(lowland_fog)
+	set_volumetric_enabled(volumetric_enabled)
+
+	var climate := displayed_weather.duplicate(true)
+	displayed_weather.clear()
+	if not climate.is_empty():
+		set_season(climate)

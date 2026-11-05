@@ -80,6 +80,18 @@ func configure(land: ForestLandscape, camera: Camera3D) -> void:
 			color.set_pixel(
 				x, z, land.ground_color(x * terrain.vertex_spacing, z * terrain.vertex_spacing)
 			)
+	var banks := Image.create(
+		settings.terrain_resolution, settings.terrain_resolution, false, Image.FORMAT_RF
+	)
+	for z in settings.terrain_resolution:
+		for x in settings.terrain_resolution:
+			banks.set_pixel(
+				x,
+				z,
+				Color(
+					land.bank_exposure(x * terrain.vertex_spacing, z * terrain.vertex_spacing), 0, 0
+				)
+			)
 	var texture := Terrain3DTextureAsset.new()
 	texture.set_asset_name("Лесная почва")
 	var tex := Image.create(128, 128, true, Image.FORMAT_RGBA8)
@@ -104,6 +116,7 @@ func configure(land: ForestLandscape, camera: Camera3D) -> void:
 	terrain.material.buffer_shader_override = load("res://shaders/bank_buffer.gdshader")
 	terrain.material.buffer_shader_override_enabled = true
 	terrain.material.set_shader_param("ecology_extent", settings.extent)
+	terrain.material.set_shader_param("bank_exposure_map", ImageTexture.create_from_image(banks))
 	# Shared, CPU-baked micro-turf: two mipmapped maps, no grass mesh instances
 	# or authoritative ecology changes. The mask remains in the terrain shader.
 	terrain.material.set_shader_param(

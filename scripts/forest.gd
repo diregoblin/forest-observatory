@@ -156,6 +156,9 @@ func _ready() -> void:
 		painterly_style.set_enabled(true)
 	add_child(water_view)
 	water_view.configure(water)
+	atmosphere.configure_ground(
+		land, water_view.material_override.get_shader_parameter("ground_map")
+	)
 	water_view.material_override.set_shader_parameter(
 		"rain_mask", atmosphere.cloud_deck.liquid_rain_mask
 	)
@@ -289,6 +292,9 @@ func _process(dt: float) -> void:
 	var frame_started := Time.get_ticks_usec()
 	vegetation.advance_weather(0.0 if paused else dt)
 	vegetation.wind.apply(atmosphere.rain_particles.process_material)
+	vegetation.wind.apply(water_view.material_override)
+	water_view.material_override.set_shader_parameter("ripple_offset_m", vegetation.wind.phase)
+	water_view.material_override.set_shader_parameter("ripple_time_s", vegetation.wind.elapsed_s)
 	if not atmosphere.rain_particles.process_material.get_shader_parameter("wind_ground_enabled"):
 		atmosphere.rain_particles.process_material.set_shader_parameter(
 			"wind_ground", water_view.material_override.get_shader_parameter("bed_map")
@@ -842,7 +848,7 @@ func _world_models() -> Dictionary:
 func _world_configuration() -> Dictionary:
 	return {
 		"seed": settings.seed,
-		"landscape_revision": 2,
+		"landscape_revision": 3,
 		"spring":
 		[
 			settings.spring_enabled,
@@ -850,7 +856,8 @@ func _world_configuration() -> Dictionary:
 			settings.spring_mouth_fraction,
 			settings.spring_flow_m3_s,
 			settings.ravine_depth_m,
-			settings.ravine_half_width_m
+			settings.ravine_half_width_m,
+			settings.spring_min_drop_m
 		],
 		"extent": settings.extent,
 		"grid": settings.water_resolution,
@@ -884,6 +891,7 @@ func _world_snapshot() -> Dictionary:
 			"camera_follow_point": camera.followed_point,
 			"camera_walking": camera.walking,
 			"selection": observation.selected.duplicate(),
+			"treefalls": vegetation.treefall.snapshot(),
 			"presentation":
 			(
 				{"time_s": presentation_s, "frames": presentation_frames.duplicate(true)}
@@ -940,6 +948,11 @@ func _restore_world(state: Dictionary) -> bool:
 			or not animal_state.alive[follow_id]
 		):
 			return false
+	var saved_falls: Variant = scene.get("treefalls", {})
+	if not vegetation.treefall.valid(
+		saved_falls, state.get("models", {}).get("plants", {}).get("fallen")
+	):
+		return false
 	var saved_display: Variant = scene.get("presentation", {})
 	if not _valid_saved_presentation(saved_display, state):
 		return false
@@ -979,6 +992,9 @@ func _restore_world(state: Dictionary) -> bool:
 	vegetation.membership_count = -1
 	terrain.refresh_ecology(soil, water, groundcover)
 	vegetation.refresh_trees(_display_climate())
+	vegetation.treefall.events = saved_falls.duplicate(true)
+	for id in saved_falls:
+		vegetation._apply_fall_pose(id, vegetation.treefall.pose(saved_falls[id]))
 	fungi.sync_fields()
 	fungi_view.refresh()
 	animals_view.rebuild()

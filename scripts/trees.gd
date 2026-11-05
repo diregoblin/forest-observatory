@@ -82,7 +82,7 @@ func _init(l: ForestLandscape, shared_soil: ForestSoil = null) -> void:
 			var weight: float = d.weight * d.initial_habitat_weights.dot(site)
 			if d.growth_form == &"tree":
 				weight *= smoothstep(.5, .9, site.x) + site.w * .02
-			if absf(x - l.channel_x(z)) < d.minimum_channel_distance:
+			if l.watercourse_distance(x, z) < d.minimum_channel_distance:
 				weight = 0.0
 			weights.append(weight)
 			if d.growth_form == &"tree":
@@ -142,7 +142,7 @@ func _init(l: ForestLandscape, shared_soil: ForestSoil = null) -> void:
 			var weight: float = d.weight * d.initial_habitat_weights.dot(site)
 			if (
 				d.growth_form not in [&"herb", &"grass"]
-				or absf(x - l.channel_x(z)) < d.minimum_channel_distance
+				or l.watercourse_distance(x, z) < d.minimum_channel_distance
 			):
 				weight = 0
 			weights.append(weight)
@@ -667,7 +667,7 @@ func _recruit(dt: float, climate: Dictionary, water: ForestWatershed, count: int
 		if x < 1 or z < 1 or x >= land.settings.extent - 1 or z >= land.settings.extent - 1:
 			continue
 		var key := Vector2i(int(x / 2), int(z / 2))
-		if occupancy.has(key) or absf(x - land.channel_x(z)) < d.minimum_channel_distance:
+		if occupancy.has(key) or land.watercourse_distance(x, z) < d.minimum_channel_distance:
 			continue
 		var dx := water.cell_size
 		var cell := (
@@ -1395,7 +1395,7 @@ func drop_seed(id: int, c: float, point: Vector3, water: ForestWatershed) -> boo
 		and water.soil[cell] > .2
 		and _light_at(point.x, point.z) >= d.recruitment_light
 	)
-	valid = valid and absf(point.x - land.channel_x(point.z)) >= d.minimum_channel_distance
+	valid = valid and land.watercourse_distance(point.x, point.z) >= d.minimum_channel_distance
 	for i in species.size():
 		if alive[i] and positions[i].distance_squared_to(point) < 4:
 			valid = false

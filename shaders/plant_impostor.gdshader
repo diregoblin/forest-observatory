@@ -26,9 +26,10 @@ void vertex() {
 	vec3 local_camera = inverse(mat3(MODEL_MATRIX)) * to_camera;
 	azimuth = mod(floor(-atan(local_camera.x, local_camera.z) / 1.570796327 + .5), 4.0);
 	float scale = length(MODEL_MATRIX[1].xyz);
-	vec3 right = normalize(vec3(to_camera.z, 0, -to_camera.x));
-	vec3 position = origin + vec3(0, center_y * scale, 0)
-		+ right * VERTEX.x * scale + vec3(0, VERTEX.y * scale, 0);
+	vec3 up = normalize(MODEL_MATRIX[1].xyz);
+	vec3 right = normalize(cross(up,to_camera));
+	vec3 position = origin + up * center_y * scale
+		+ right * VERTEX.x * scale + up * VERTEX.y * scale;
 	mat4 inverse_model = inverse(MODEL_MATRIX);
 	VERTEX = (inverse_model * vec4(position, 1)).xyz;
 	NORMAL = normalize((inverse_model * vec4(normalize(to_camera), 0)).xyz);

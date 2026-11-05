@@ -20,6 +20,7 @@ extends Resource
 @export var spring_flow_m3_s := .04  # External catchment inflow, not free groundwater.
 @export var ravine_depth_m := 8.0
 @export var ravine_half_width_m := 14.0
+@export var spring_min_drop_m := 12.0  # Minimum intended head-to-confluence relief.
 @export var soil_interval_s := 30.0
 @export var soil_profile: ForestSoilProfile = preload("res://data/soils/loam.tres")
 @export var evaporation_m_s := 0.12 / 1000.0 / 3600.0
@@ -77,6 +78,7 @@ func validate() -> void:
 	assert(spring_fraction.x > 0 and spring_fraction.x < 1)
 	assert(spring_fraction.y > 0 and spring_fraction.y < spring_mouth_fraction)
 	assert(spring_mouth_fraction < 1 and ravine_depth_m > 0 and ravine_half_width_m > 0)
+	assert(is_finite(spring_min_drop_m) and spring_min_drop_m > 0)
 	assert(is_finite(cloud_span_factor) and cloud_span_factor >= 2 and cloud_span_factor <= 32)
 	assert(weather_resolution >= 4 and weather_resolution <= 64)
 	assert(is_finite(weather_front_speed_m_s) and weather_front_speed_m_s > 0)
