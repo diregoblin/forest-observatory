@@ -293,9 +293,11 @@ func _build_options(root: Control, settings: ForestSettings) -> void:
 	_label(help, "КАМЕРА", 12, Color(.70, .76, .60))
 	_label(
 		help,
-		("WASD — движение · ПКМ — повернуть взгляд\n"
-		+ "Q / E — высота в полёте · Shift — быстрее\n"
-		+ "P — прогулка / полёт · 1–9 — точки наблюдения"),
+		(
+			"WASD — движение · ПКМ — повернуть взгляд\n"
+			+ "Q / E — высота в полёте · Shift — быстрее\n"
+			+ "P — прогулка / полёт · 1–9 — точки наблюдения"
+		),
 		16,
 		Color(.93, .94, .83)
 	)
@@ -461,6 +463,10 @@ func refresh(
 				% [water.config.day_speed_multiplier, water.config.year_speed_multiplier]
 			)
 		)
+		if climate.has("relative_humidity"):
+			calendar_label.tooltip_text += (
+				"\nВлажность воздуха возле наблюдателя: %.0f%%." % (climate.relative_humidity * 100)
+			)
 		calendar_label.text += (
 			"\n%s · ветер %.1f м/с"
 			% [climate.get("weather_title", "Просмотр сезона"), climate.get("wind_m_s", 0.0)]

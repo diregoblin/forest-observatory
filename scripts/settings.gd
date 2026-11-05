@@ -24,7 +24,8 @@ extends Resource
 @export var soil_profile: ForestSoilProfile = preload("res://data/soils/loam.tres")
 @export var evaporation_m_s := 0.12 / 1000.0 / 3600.0
 @export var cloud_span_factor := 8.0
-@export var cloud_velocity_m_s := Vector2(1.2, .45)  # Scenario upper-deck transport.
+@export var weather_resolution := 16  # Coarse prescribed air-mass properties.
+@export var weather_front_speed_m_s := 8.0
 @export var wind_resolution := 32  # Presentation velocity grid; cell-centred.
 @export var wind_shelter_resolution := 64  # Submitted crown obstruction grid.
 @export var wind_display_interval_s := .1
@@ -77,7 +78,8 @@ func validate() -> void:
 	assert(spring_fraction.y > 0 and spring_fraction.y < spring_mouth_fraction)
 	assert(spring_mouth_fraction < 1 and ravine_depth_m > 0 and ravine_half_width_m > 0)
 	assert(is_finite(cloud_span_factor) and cloud_span_factor >= 2 and cloud_span_factor <= 32)
-	assert(cloud_velocity_m_s.is_finite())
+	assert(weather_resolution >= 4 and weather_resolution <= 64)
+	assert(is_finite(weather_front_speed_m_s) and weather_front_speed_m_s > 0)
 	assert(wind_resolution >= 8 and wind_resolution <= 128)
 	assert(wind_shelter_resolution >= 8 and wind_shelter_resolution <= 256)
 	assert(wind_display_interval_s > 0 and wind_display_interval_s <= .5)

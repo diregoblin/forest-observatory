@@ -156,7 +156,9 @@ func _ready() -> void:
 		painterly_style.set_enabled(true)
 	add_child(water_view)
 	water_view.configure(water)
-	water_view.material_override.set_shader_parameter("rain_mask", atmosphere.cloud_deck.rain_mask)
+	water_view.material_override.set_shader_parameter(
+		"rain_mask", atmosphere.cloud_deck.liquid_rain_mask
+	)
 	water_view.material_override.set_shader_parameter("spatial_rain", true)
 	camera.water_surface = water_view.display_stage_at
 	terrain.configure_bank_display(water_view)
@@ -286,6 +288,12 @@ func _ready() -> void:
 func _process(dt: float) -> void:
 	var frame_started := Time.get_ticks_usec()
 	vegetation.advance_weather(0.0 if paused else dt)
+	vegetation.wind.apply(atmosphere.rain_particles.process_material)
+	if not atmosphere.rain_particles.process_material.get_shader_parameter("wind_ground_enabled"):
+		atmosphere.rain_particles.process_material.set_shader_parameter(
+			"wind_ground", water_view.material_override.get_shader_parameter("bed_map")
+		)
+		atmosphere.rain_particles.process_material.set_shader_parameter("wind_ground_enabled", true)
 	wind_audio.update(dt, paused)
 	habitat_view.advance_display()
 	total_wall += dt
@@ -740,6 +748,9 @@ func _refresh_hud() -> void:
 	terrain.set_surface_season(_display_climate())
 	atmosphere.rain_particles.speed_scale = 0.0 if paused else 1.0
 	habitat_view.paused = paused
+	var observer_weather := ForestWeatherFront.local(
+		_display_climate(), Vector2(camera.position.x, camera.position.z)
+	)
 	hud.refresh(
 		water,
 		vegetation,
@@ -748,7 +759,7 @@ func _refresh_hud() -> void:
 		sim_speed,
 		achieved_speed,
 		trees,
-		_display_climate(),
+		observer_weather,
 		season_preview != 0
 	)
 	hud.refresh_fungi(fungi_view)

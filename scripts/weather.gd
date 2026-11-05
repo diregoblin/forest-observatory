@@ -3,7 +3,7 @@ extends RefCounted
 
 ## Seeded fronts on the shared hydrological clock, not a regional forecast.
 ## Uniform snow is water equivalent (m); actual liquid goes through native water.
-const FRONT_S := 85.0
+const FRONT_S := ForestWeatherFront.INTERVAL_S
 var clouds: ForestCloudField
 var settings: ForestSettings
 var elapsed_s := 0.0
@@ -19,56 +19,25 @@ func _init(configuration: ForestSettings) -> void:
 	clouds = ForestCloudField.new(settings)
 
 
-func _front(index: int) -> Vector4:
-	if index <= 0:
-		return Vector4(.18, 0, 2.0, 0)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = settings.seed + index * 104729 + 9031
-	var u := rng.randf()
-	if u < .27:
-		return Vector4(.12, 0, rng.randf_range(.5, 3), 3.0)  # dry spell
-	if u < .52:
-		return Vector4(.62, .06, rng.randf_range(2, 6), -.8)
-	if u < .91:
-		return Vector4(.94, rng.randf_range(.35, .8), rng.randf_range(3, 9), -2.5)
-	return Vector4(1, 1, rng.randf_range(15, 22), -4)  # rare storm
-
-
 func sample(climate: Dictionary, at_s := -1.0) -> Dictionary:
 	var t := elapsed_s if at_s < 0 else at_s
-	var index := int(t / FRONT_S)
-	var a := _front(index)
-	var b := _front(index + 1)
-	var phase := smoothstep(.12, .82, fposmod(t, FRONT_S) / FRONT_S)
-	var front := a.lerp(b, phase)
-	var rain := front.y
-	if forced >= 0 and t < forced_until_s:
-		rain = float(forced)
-		front.x = .96 if forced == 1 else .16
 	var result := climate.duplicate()
-	result.temperature_c += front.w
-	result.growth = clampf((result.temperature_c - 5.0) / 14.0, 0, 1) * (1 - .28 * front.x)
-	result.evaporation *= (1 - .6 * front.x) * (1 + front.z * .035)
-	result.cloud_cover = front.x
-	result.wind_m_s = front.z
-	result.wind_direction = Vector2(cos(index * .71 + .4), sin(index * .71 + .4))
-	result.precipitation_m_s = rain * settings.rainfall_m_s
-	result.precipitation_potential_m_s = result.precipitation_m_s
-	result.cloud_offset_m = clouds.offset_at(t)
-	result.rain_fraction = rain if result.temperature_c > 0 else 0.0
-	result.snow_water_m = snow_water_m
-	result.weather_time_s = t
-	result.weather_title = (
-		"Снег"
-		if rain > .08 and result.temperature_c <= 0
-		else (
-			"Ливень"
-			if rain > .78
-			else ("Дождь" if rain > .12 else ("Облачно" if front.x > .5 else "Ясно"))
-		)
+	ForestWeatherFront.prepare(
+		result,
+		settings.seed,
+		settings.extent,
+		t,
+		settings.weather_resolution,
+		settings.weather_front_speed_m_s
 	)
-	if front.z >= 14:
-		result.weather_title = "Шторм · " + result.weather_title
+	result.front_forced = forced
+	result.front_forced_until_s = forced_until_s
+	result.front_rainfall_m_s = settings.rainfall_m_s
+	result = ForestWeatherFront.local(result, Vector2.ONE * settings.extent * .5)
+	result.cloud_offset_m = clouds.offset_at(t)
+	result.gust_offset_m = clouds.wind_offset_at(t) * .7
+	result.snow_water_m = snow_water_m
+
 	return result
 
 
@@ -81,14 +50,9 @@ func step(dt: float, climate: Dictionary) -> Dictionary:
 	var field := clouds.grid(forcing, melt / dt)
 	var amount: float = field.mean_precipitation_m_s * dt
 	precipitation_m += amount
-	var liquid := amount + melt
+	var liquid: float = field.mean_liquid_m_s * dt + melt
 	var rates: PackedFloat64Array = field.rates
-	if forcing.temperature_c <= 0:
-		snow_water_m += amount
-		liquid = 0
-		rates.fill(0)
-	else:
-		snow_water_m -= melt
+	snow_water_m += amount - field.mean_liquid_m_s * dt - melt
 	liquid_m += liquid
 	forcing.precipitation_m_s = field.mean_precipitation_m_s
 	forcing.liquid_m_s = liquid / dt
@@ -105,7 +69,7 @@ func toggle(raining: bool) -> void:
 
 func snapshot() -> Dictionary:
 	return {
-		"version": 2,
+		"version": 3,
 		"cloud_configuration": clouds.configuration(),
 		"seed": settings.seed,
 		"elapsed_s": elapsed_s,
@@ -119,11 +83,9 @@ func snapshot() -> Dictionary:
 
 func restore(state: Dictionary) -> bool:
 	if (
-		state.get("version") not in [1, 2]
+		state.get("version") not in [1, 2, 3]
 		or state.get("seed") != settings.seed
-		or (
-			state.get("version") == 2 and state.get("cloud_configuration") != clouds.configuration()
-		)
+		or not _compatible_cloud_configuration(state)
 	):
 		return false
 	for field in ["elapsed_s", "snow_water_m", "precipitation_m", "liquid_m", "forced_until_s"]:
@@ -140,3 +102,23 @@ func restore(state: Dictionary) -> bool:
 	]:
 		set(field, state[field])
 	return true
+
+
+func _compatible_cloud_configuration(state: Dictionary) -> bool:
+	if state.get("version") == 1:
+		return true
+	if state.get("cloud_configuration") == clouds.configuration():
+		return true
+	# Version 2 used a fixed cloud velocity. Preserve its water/snow ledger;
+	# future transport follows the new wind-driven scenario after migration.
+	var old: Variant = state.get("cloud_configuration")
+	var current := clouds.configuration()
+	return (
+		state.get("version") == 2
+		and old is Array
+		and old.size() == 6
+		and old[0] == 1
+		and old.slice(1, 5) == current.slice(1, 5)
+		and old[5] is Vector2
+		and old[5].is_finite()
+	)

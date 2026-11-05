@@ -25,6 +25,7 @@ func _run() -> void:
 	var completions := 0
 	var previous_tick: int = scene.presentation_tick
 	var deck = scene.atmosphere.cloud_deck
+	assert(deck.clouds != scene.weather.clouds, "View owns its trajectory cache")
 	for frame in 50:
 		await RenderingServer.frame_post_draw
 		busy += int(scene.model_work_active)

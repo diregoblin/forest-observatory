@@ -115,7 +115,7 @@ void fragment() {
 		+ transpose(rotation*rotation)*fine.xy*weights.z;
 	vec3 rain = vec3(0);
 	float local_rain = rainfall;
-	if (spatial_rain) { local_rain *= texture(rain_mask, p / world_extent).r; }
+	if (spatial_rain) { local_rain = texture(rain_mask, p / world_extent).r; }
 	float rain_visibility = local_rain * (1.0-smoothstep(.035,.14,footprint));
 	if (rain_visibility > .001) { rain = rain_detail(p, footprint) * rain_visibility; }
 	float glint = smoothstep(.45,.85,ripple);

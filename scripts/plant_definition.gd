@@ -37,6 +37,7 @@ extends Resource
 @export var scale_range := Vector2(.72, 1.5)
 @export var minimum_channel_distance := 14.0
 @export var wind_strength := .015
+@export var wind_resistance_m_s := 28.0  # Scenario critical gust for a reference tree.
 # Presentation traits only; no extra biomass, RNG consumption or save state.
 @export var canopy_texture: Texture2D
 @export var canopy_leaf_span_m := .12
@@ -74,6 +75,7 @@ func validate() -> void:
 		assert(module.leaf_size.x > 0 and module.leaf_size.y > 0)
 		assert(module.bend.is_finite() and module.tip_offset.is_finite())
 		assert(module.shape != "shoot" or module.mesh is CylinderMesh)
+	assert(is_finite(wind_resistance_m_s) and wind_resistance_m_s > 0)
 	assert(canopy_leaf_span_m > 0 and canopy_layers >= 0 and canopy_layers <= 4)
 	assert(branch_radius_m >= 0 and branch_droop >= 0 and branch_droop <= 1)
 	assert(canopy_layers == 0 or canopy_texture != null)

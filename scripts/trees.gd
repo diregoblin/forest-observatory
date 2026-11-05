@@ -248,9 +248,18 @@ func step(dt: float, water: ForestWatershed, water_dt := -1.0, forcing: Dictiona
 	)
 	if not forcing.is_empty():
 		climate = forcing
+	var local_fields := ForestWeatherFront.grid(climate, land.settings.extent)
+	var local_evaporation := PackedFloat64Array()
+	var local_growth := PackedFloat64Array()
+	for point in positions:
+		var p := Vector2(point.x, point.z)
+		local_evaporation.append(
+			ForestWeatherFront.value(local_fields.evaporation, p, land.settings.extent)
+		)
+		local_growth.append(ForestWeatherFront.value(local_fields.growth, p, land.settings.extent))
 	var profile := {}
 	var mark := Time.get_ticks_usec()
-	_windfall(dt, climate)
+	_windfall(dt, climate, water_dt)
 	profile.windfall = Time.get_ticks_usec() - mark
 	mark = Time.get_ticks_usec()
 	_leaf_turnover(dt)
@@ -297,7 +306,7 @@ func step(dt: float, water: ForestWatershed, water_dt := -1.0, forcing: Dictiona
 			demand[root_cells[i]] += (
 				d.transpiration_m_s
 				* leaves[species[i]]
-				* climate.evaporation
+				* local_evaporation[i]
 				* area
 				* water_dt
 				/ water.cell_area
@@ -320,7 +329,7 @@ func step(dt: float, water: ForestWatershed, water_dt := -1.0, forcing: Dictiona
 		var d: ForestPlantDefinition = land.settings.plants[species[i]]
 		var cell := root_cells[i]
 		var ratio := clampf(supplied[cell] / demand[cell], 0, 1) if demand[cell] > 0 else 1.0
-		if water_dt == 0 and d.transpiration_m_s * leaves[species[i]] * climate.evaporation > 0:
+		if water_dt == 0 and d.transpiration_m_s * leaves[species[i]] * local_evaporation[i] > 0:
 			ratio = last_supply[i]
 		last_supply[i] = ratio
 		var flood := clampf(water.depth[cell] / d.flood_depth_m - 1.0, 0, 1)
@@ -341,7 +350,7 @@ func step(dt: float, water: ForestWatershed, water_dt := -1.0, forcing: Dictiona
 		if stress[i] >= d.lethal_stress or age_years[i] >= lifespan or seasonal_death[species[i]]:
 			_die(i)
 			continue
-		var growth: float = climate.growth * leaves[species[i]]
+		var growth: float = local_growth[i] * leaves[species[i]]
 		growth *= (
 			ratio
 			* (1.0 - stress[i])
@@ -1039,6 +1048,7 @@ func _configuration() -> Dictionary:
 			"germination_fraction",
 			"nurse_log_affinity",
 			"snow_retention",
+			"wind_resistance_m_s",
 			"trampling_resistance",
 			"recruitment_light",
 			"dead_decay_per_year",
@@ -1064,7 +1074,10 @@ func _configuration() -> Dictionary:
 # Full validation precedes mutation; saved recruits may extend initial arrays.
 # gdlint: disable=max-returns
 func restore(state: Dictionary) -> bool:
-	if state.get("version", 0) != 5 or state.get("configuration", {}) != _configuration():
+	if (
+		state.get("version", 0) != 5
+		or not _compatible_configuration(state.get("configuration", {}))
+	):
 		return false
 	if not state.get("species") is PackedInt32Array:
 		return false
@@ -1208,17 +1221,56 @@ static func snow_load_index(d: ForestPlantDefinition, climate: Dictionary) -> fl
 	)
 
 
-static func windfall_rate(
-	d: ForestPlantDefinition, climate: Dictionary, stress_value: float
+static func critical_gust(
+	d: ForestPlantDefinition,
+	climate: Dictionary,
+	stress_value: float,
+	scale_value := 1.0,
+	standing_dead := false
 ) -> float:
-	var wind: float = climate.get("wind_m_s", 0.0)
+	var height := maxf(1, d.reference_height_m * scale_value)
+	var crown := maxf(.25, d.crown_radius_m * scale_value)
+	var foliage := (
+		.2 if standing_dead else .2 + .8 * ForestClimate.leaves(d, climate.get("day", 150.0))
+	)
 	return (
-		maxf(0, wind - 14) * .018 * (1 + stress_value * 3)
-		+ snow_load_index(d, climate) * .12 * clampf(wind / 12, 0, 2)
+		d.wind_resistance_m_s
+		* (.25 if standing_dead else 1.0)
+		* pow(13.0 / height, .35)
+		* pow(3.0 / crown, .15)
+		/ sqrt(foliage)
+		/ (1 + .65 * stress_value + .3 * snow_load_index(d, climate))
 	)
 
 
-func _windfall(dt: float, climate: Dictionary) -> void:
+static func windfall_rate(
+	d: ForestPlantDefinition,
+	climate: Dictionary,
+	stress_value: float,
+	scale_value := 1.0,
+	standing_dead := false
+) -> float:
+	# Failure hazard per hydrological second. Squared velocity is the load
+	# proxy; excess load and duration determine the stochastic scenario risk.
+	var ratio: float = (
+		climate.get("wind_m_s", 0.0)
+		/ critical_gust(d, climate, stress_value, scale_value, standing_dead)
+	)
+	var snow_hazard: float = (
+		snow_load_index(d, climate)
+		* .12
+		* clampf(climate.get("wind_m_s", 0.0) / 12, 0, 2)
+		/ ForestClimate.YEAR_S
+	)
+	return pow(maxf(0, ratio * ratio - 1), 2) / 120.0 + snow_hazard
+
+
+func _windfall(dt: float, climate: Dictionary, exposure_dt := -1.0) -> void:
+	if exposure_dt < 0:
+		exposure_dt = dt
+	var phase_rng := RandomNumberGenerator.new()
+	phase_rng.seed = land.settings.seed + 54037
+	var seed_phase := Vector2(phase_rng.randf_range(-500, 500), phase_rng.randf_range(-500, 500))
 	for i in species.size():
 		var d: ForestPlantDefinition = land.settings.plants[species[i]]
 		if d.growth_form != &"tree":
@@ -1226,14 +1278,28 @@ func _windfall(dt: float, climate: Dictionary) -> void:
 		if fallen[i]:
 			fallen_age_s[i] += dt
 			continue
-		var rate := windfall_rate(d, climate, stress[i]) if alive[i] else .6
-		if rng.randf() < 1 - exp(-rate * dt / ForestClimate.YEAR_S):
+		var local_climate := ForestWeatherFront.local(
+			climate, Vector2(positions[i].x, positions[i].z), true
+		)
+		var direction: Vector2 = local_climate.get(
+			"wind_direction", Vector2(cos(yaw[i]), sin(yaw[i]))
+		)
+		var speed: float = local_climate.get("wind_m_s", 0.0)
+		if climate.has("gust_offset_m"):
+			speed *= ForestWeatherFront.gust_envelope(
+				Vector2(positions[i].x, positions[i].z) - climate.gust_offset_m + seed_phase
+			)
+		local_climate = local_climate.duplicate()
+		local_climate.wind_m_s = speed
+		var hazard := (
+			windfall_rate(d, local_climate, stress[i], size[i], not alive[i]) * exposure_dt
+		)
+		if not alive[i]:
+			hazard += .6 * dt / ForestClimate.YEAR_S
+		if rng.randf() < 1 - exp(-hazard):
 			if alive[i]:
 				_die(i)
 			fallen[i] = 1
-			var direction: Vector2 = climate.get(
-				"wind_direction", Vector2(cos(yaw[i]), sin(yaw[i]))
-			)
 			yaw[i] = fposmod(direction.angle(), TAU)
 
 
@@ -1366,3 +1432,15 @@ func harvest_dead(id: int, request: float) -> Vector3:
 	exported_kg_n += meal.y
 	exported_kg_p += meal.z
 	return meal
+
+
+func _compatible_configuration(saved: Variant) -> bool:
+	if not saved is Dictionary:
+		return false
+	var current := _configuration()
+	if saved == current:
+		return true
+	# Pre-resistance worlds retain all previous ecological trait checks.
+	for traits in current.traits:
+		traits.erase("wind_resistance_m_s")
+	return saved == current

@@ -12,8 +12,10 @@ engine installations, services, user saves, or other projects for this work.
   exceptions. Add reusable morphological parameters/components instead.
 - Hydrological obstacles are arbitrary segments with crest elevations. The
   solver consumes face-crest fields, not scenario-specific dam conditionals.
-- All ecology advances on fixed **model** time, not render-frame time. Rendering
-  interpolation and wind are presentation only. Seeded generation is local.
+- All ecology advances on fixed **model** time, not render-frame time. Cloud
+  transport, air-mass forcing and windthrow use the hydrological clock; wind
+  exposure duration is SI seconds, separate from biological growth/decay.
+  Vegetation sway and particle drift use presentation time. Seeded generation is local.
 - The live scene runs one entire coupled tick on one worker. While it owns the
   models, the main thread uses only submitted display state. Join before model
   reads/mutations (including pause, save/load, controls and picking); no competing

@@ -106,6 +106,7 @@ func _run() -> void:
 	)
 	var dry_climate := forcing.duplicate()
 	dry_climate.precipitation_potential_m_s = 0.0
+	dry_climate.front_forced = 0
 	assert(weather.clouds.grid(dry_climate).rates.count(0) == field.size())
 	var report := {
 		"passed": true,
@@ -114,7 +115,7 @@ func _run() -> void:
 		"max_independent_rate_error_m_s": maximum_error,
 		"rain_volume_m3": expected_volume,
 		"water_input_m3": actual,
-		"cloud_velocity_m_s": str(settings.cloud_velocity_m_s),
+		"cloud_velocity_m_s": "integrated weather wind and plot-mean gusts",
 		"save_continuation_ticks": 100
 	}
 	var file := FileAccess.open("res://artifacts/spatial-rain-check.json", FileAccess.WRITE)

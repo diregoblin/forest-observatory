@@ -25,6 +25,7 @@ var shelter_dirty := false
 var last_update_usec := 0
 var updates := 0
 var seed_phase := Vector2.ZERO
+var submitted_weather := {}
 
 
 func configure(settings: ForestSettings) -> void:
@@ -111,13 +112,7 @@ func flush_shelter() -> void:
 
 
 func envelope(position: Vector2) -> float:
-	var p := position + seed_phase
-	# Compact, staggered packets with a broad transverse envelope. Transport
-	# uses the accumulated wind displacement, so a weather turn cannot teleport
-	# an entire field as absolute_time * new_direction would.
-	var a := pow(maxf(0.0, cos(p.x * .061 + p.y * .027)), 4)
-	var b := pow(maxf(0.0, cos(p.x * -.019 + p.y * .043)), 2)
-	return .48 + 1.25 * a * (.35 + .65 * b) + .18 * b
+	return ForestWeatherFront.gust_envelope(position + seed_phase)
 
 
 func _image(offset: Vector2, mean_wind: Vector2) -> Image:
@@ -127,7 +122,11 @@ func _image(offset: Vector2, mean_wind: Vector2) -> Image:
 	for z in resolution:
 		for x in resolution:
 			var p := (Vector2(x, z) + Vector2.ONE * .5) * cell - offset
-			var velocity := mean_wind * envelope(p)
+			var local_mean := mean_wind
+			if not submitted_weather.is_empty():
+				var local_climate := ForestWeatherFront.local(submitted_weather, p + offset, true)
+				local_mean = local_climate.wind_direction * local_climate.wind_m_s
+			var velocity := local_mean * envelope(p)
 			var index := (z * resolution + x) * 2
 			pixels[index] = velocity.x
 			pixels[index + 1] = velocity.y

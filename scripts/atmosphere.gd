@@ -98,6 +98,10 @@ func set_rain(raining: bool) -> void:
 
 
 func set_season(climate: Dictionary) -> void:
+	if observer != null and climate.has("front_extent_m"):
+		climate = ForestWeatherFront.local(
+			climate, Vector2(observer.position.x, observer.position.z)
+		)
 	# Especially on pause: don't rebuild sky radiance for an unchanged model sample.
 	if climate == displayed_weather:
 		return
@@ -110,7 +114,9 @@ func set_season(climate: Dictionary) -> void:
 	)
 	var snowing: bool = climate.temperature_c <= 0 and precip > 1e-9
 	rain_particles.emitting = raining or snowing
-	rain_particles.amount_ratio = maxf(.03, precip * 1000 * 3600 / 30.0)
+	rain_particles.amount_ratio = (
+		1.0 if climate.has("front_extent_m") else maxf(.03, precip * 1000 * 3600 / 30.0)
+	)
 	rain_particles.draw_pass_1 = snow_flake if snowing else rain_drop
 	if rain_particles.process_material != null:
 		rain_particles.process_material.set_shader_parameter("fall_speed", 2.0 if snowing else 21.0)

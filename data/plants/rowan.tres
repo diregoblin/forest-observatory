@@ -83,6 +83,7 @@ leaf_on_day = 110.0
 leaf_off_day = 255.0
 leaf_transition_days = 20.0
 autumn_color = Color(0.87,0.36,0.10,1)
+wind_resistance_m_s = 32.0
 reference_height_m = 9
 max_height_m = 16.2
 crown_radius_m = 1.8

@@ -509,6 +509,7 @@ func _impostor_hit(point: Vector3, asset: Dictionary, angle: int, leaves: float)
 
 func set_weather(climate: Dictionary) -> void:
 	# Targets are submitted only while the composition root owns the models.
+	wind.submitted_weather = climate.duplicate() if climate.has("front_extent_m") else {}
 	wind_strength_target = clampf(climate.get("wind_m_s", 2.0) / 3, 0, 5)
 	wind_direction_target = climate.get("wind_direction", Vector2.RIGHT)
 	for species in tree_materials:

@@ -39,9 +39,12 @@ void sky() {
 		// A higher horizontal deck, behind the low sheet: smaller angular detail,
 		// stretched wisps, thinner opacity and a different advection rate.
 		vec2 high_sheet = EYEDIR.xz / max(EYEDIR.y + .22, .10) * 6.5;
-		vec3 high_p = vec3(high_sheet.x * .42, 17.3, high_sheet.y * 1.6)
-			+ weather_time * vec3(.003, 0, -.002);
-		float high_field = .72 * cloud_noise_at(high_p) + .28 * cloud_noise_at(high_p * 2.07 + 11.8);
+		vec3 high_p = vec3(high_sheet.x * .42, 17.3, high_sheet.y * 1.6);
+		// Each noise lookup repeats every eight source units. A wrapped
+		// whole-deck displacement therefore remains seamless in both octaves.
+		vec3 high_drift = vec3(cloud_offset_m.x,0,cloud_offset_m.y) * (8.0/cloud_span);
+		float high_field = .72 * cloud_noise_at(high_p-high_drift)
+			+ .28 * cloud_noise_at(high_p*2.07+11.8-high_drift);
 		float high_threshold = mix(.67, .52, cloud_cover);
 		float high_edge = smoothstep(high_threshold - .03, high_threshold + .09, high_field);
 		vec3 high_color = mix(vec3(.14, .17, .25), vec3(.93, .96, 1.0) * sun_tint.rgb, daylight);
@@ -56,12 +59,15 @@ void sky() {
 		}
 		vec2 deck_uv = .5 + sheet * (cloud_height/(2.4*cloud_span));
 		float field = texture(cloud_density, deck_uv - cloud_offset_m/cloud_span).r;
+		float local_cover = cloud_cover;
 		if (world_clouds && all(greaterThanEqual(deck_uv, vec2(0)))
 			&& all(lessThanEqual(deck_uv, vec2(1)))) {
-			field = texture(cloud_field_map, deck_uv).r;
+			vec2 data = texture(cloud_field_map, deck_uv).rg;
+			field = data.r;
+			local_cover = data.g;
 		}
-		float threshold = mix(.69, .37, cloud_cover);
-		float edge = cloud_opacity(field, cloud_cover);
+		float threshold = mix(.69, .37, local_cover);
+		float edge = cloud_opacity(field, local_cover);
 		// Broad, screen-stable painted core; coverage is shared with the native
 		// caster instead of independently regenerated noise.
 		float shade_field = field;
@@ -71,7 +77,7 @@ void sky() {
 		vec3 lit = mix(vec3(.21, .24, .34), vec3(1, .98, .88) * sun_tint.rgb, daylight);
 		// Thin fringes reveal the sky, not a saturated bright sticker outline.
 		vec3 clouds = mix(lit, shadow, .24 + tones * .46);
-		clouds *= mix(1.0, .70, smoothstep(.50, .95, cloud_cover));
+		clouds *= mix(1.0, .70, smoothstep(.50, .95, local_cover));
 		COLOR = mix(COLOR, clouds, edge * horizon_fade * lower_cloud_opacity);
 		COLOR += sun_tint.rgb * smoothstep(.9991, .9995, sun_dot) * daylight * .7;
 		COLOR = mix(horizon.rgb * .64, COLOR, smoothstep(-.10, .03, EYEDIR.y));

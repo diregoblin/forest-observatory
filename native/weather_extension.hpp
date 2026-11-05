@@ -10,6 +10,7 @@ protected:
         ClassDB::bind_method(D_METHOD("configure","size","span_m","density"),&ForestWeatherFieldNative::configure);
         ClassDB::bind_method(D_METHOD("sample_grid","resolution","extent_m","offset_m","cover","potential_m_s","uniform_liquid_m_s"),&ForestWeatherFieldNative::sample_grid,DEFVAL(0.0));
         ClassDB::bind_method(D_METHOD("sample_density","x","z","extent_m","offset_m"),&ForestWeatherFieldNative::sample_density);
+        ClassDB::bind_method(D_METHOD("sample_spatial_grid","resolution","extent_m","offset_m","coarse_n","cover","potential_m_s","temperature_c","uniform_liquid_m_s"),&ForestWeatherFieldNative::sample_spatial_grid);
     }
 public:
     bool configure(int size,double span,const PackedFloat64Array &values) {
@@ -39,4 +40,41 @@ public:
         result["mean_precipitation_m_s"]=sum/(resolution*resolution);
         return result;
     }
+    static double interpolate(const PackedFloat64Array &values, int n, double u, double v) {
+        const double x=std::clamp(u,0.0,1.0)*n-.5, z=std::clamp(v,0.0,1.0)*n-.5;
+        const int ix=static_cast<int>(std::floor(x)), iz=static_cast<int>(std::floor(z));
+        const double wx=x-ix, wz=z-iz;
+        auto at=[&](int a,int b){return values[std::clamp(b,0,n-1)*n+std::clamp(a,0,n-1)];};
+        return (at(ix,iz)*(1-wx)+at(ix+1,iz)*wx)*(1-wz)+
+               (at(ix,iz+1)*(1-wx)+at(ix+1,iz+1)*wx)*wz;
+    }
+    Dictionary sample_spatial_grid(int resolution,double extent,const Vector2 &offset,int coarse_n,
+                                  const PackedFloat64Array &cover,const PackedFloat64Array &potential,
+                                  const PackedFloat64Array &temperature,double uniform_liquid) const {
+        Dictionary result;
+        if (field.n==0 || resolution<2 || resolution>2048 || coarse_n<2 || coarse_n>256 ||
+            !std::isfinite(extent) || extent<=0 || !offset.is_finite() ||
+            !std::isfinite(uniform_liquid) || uniform_liquid<0 ||
+            cover.size()!=coarse_n*coarse_n || potential.size()!=cover.size() ||
+            temperature.size()!=cover.size()) return result;
+        for(int i=0;i<cover.size();++i)
+            if(!std::isfinite(cover[i]) || cover[i]<0 || cover[i]>1 ||
+               !std::isfinite(potential[i]) || potential[i]<0 || !std::isfinite(temperature[i])) return result;
+        PackedFloat64Array rates; rates.resize(resolution*resolution);
+        double *out=rates.ptrw(), precipitation=0, liquid=0;
+        for(int z=0;z<resolution;++z) for(int x=0;x<resolution;++x){
+            const double u=(x+.5)/resolution, v=(z+.5)/resolution;
+            const double c=interpolate(cover,coarse_n,u,v);
+            const double rate=interpolate(potential,coarse_n,u,v)*forest::CloudField::rain_weight(
+                field.sample(u*extent,v*extent,extent,offset.x,offset.y),c);
+            const double rain=interpolate(temperature,coarse_n,u,v)>0 ? rate : 0;
+            out[z*resolution+x]=rain+uniform_liquid;
+            precipitation+=rate; liquid+=rain;
+        }
+        result["rates"]=rates;
+        result["mean_precipitation_m_s"]=precipitation/(resolution*resolution);
+        result["mean_liquid_m_s"]=liquid/(resolution*resolution);
+        return result;
+    }
+
 };

@@ -12,6 +12,8 @@ func _initialize() -> void:
 
 func climate_at(t: float) -> Dictionary:
 	var climate: Dictionary = scene.weather.sample(ForestClimate.sample(0, 160, 60, 12), t)
+	climate.front_forced = 1
+	climate.front_forced_until_s = 10000.0
 	climate.cloud_cover = .96
 	climate.precipitation_potential_m_s = scene.settings.rainfall_m_s
 	climate.precipitation_m_s = scene.settings.rainfall_m_s
@@ -23,6 +25,15 @@ func climate_at(t: float) -> Dictionary:
 
 func submit(climate: Dictionary) -> void:
 	scene.atmosphere.set_season(climate)
+	scene.vegetation.wind.submitted_weather = climate
+	scene.vegetation.wind.advance(.1, climate.wind_direction * climate.wind_m_s)
+	scene.vegetation.wind.apply(scene.atmosphere.rain_particles.process_material)
+	scene.atmosphere.rain_particles.process_material.set_shader_parameter(
+		"wind_ground", scene.water_view.material_override.get_shader_parameter("bed_map")
+	)
+	scene.atmosphere.rain_particles.process_material.set_shader_parameter(
+		"wind_ground_enabled", true
+	)
 	scene.painterly_style._process(0)
 	scene.water_view.material_override.set_shader_parameter("rainfall", climate.rain_fraction)
 	scene.water_view.material_override.set_shader_parameter("weather_time", climate.weather_time_s)

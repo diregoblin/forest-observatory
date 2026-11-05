@@ -14,7 +14,9 @@ var shadows_enabled := true
 var clouds: ForestCloudField
 var source_texture: ImageTexture
 var rain_mask: ImageTexture
+var liquid_rain_mask: ImageTexture
 var cloud_offset := Vector2.ZERO
+var cover_texture: ImageTexture
 
 
 func configure(world_extent: float, source: ForestCloudField = null) -> void:
@@ -23,11 +25,23 @@ func configure(world_extent: float, source: ForestCloudField = null) -> void:
 		var configuration := ForestSettings.new()
 		configuration.extent = extent
 		source = ForestCloudField.new(configuration)
-	clouds = source
+	# Own derived trajectory caches; only the immutable tile is shared with the model.
+	clouds = ForestCloudField.new(source.settings)
 	source_texture = ImageTexture.create_from_image(ForestCloudField.tile)
 	rain_mask = ImageTexture.create_from_image(
 		ForestFieldTexture.image(clouds.weights({}), clouds.settings.water_resolution)
 	)
+	liquid_rain_mask = ImageTexture.create_from_image(
+		ForestFieldTexture.image(clouds.weights({}, {}, true), clouds.settings.water_resolution)
+	)
+	var cover_image := Image.create(
+		clouds.settings.weather_resolution,
+		clouds.settings.weather_resolution,
+		false,
+		Image.FORMAT_RF
+	)
+	cover_image.fill(Color(.18, 0, 0))
+	cover_texture = ImageTexture.create_from_image(cover_image)
 	height = extent * .5
 	position = Vector3(extent * .5, height, extent * .5)
 	var plane := PlaneMesh.new()
@@ -52,6 +66,8 @@ func configure(world_extent: float, source: ForestCloudField = null) -> void:
 	field_material.shader = preload("res://shaders/cloud_field_map.gdshader")
 	field_material.set_shader_parameter("cloud_density", source_texture)
 	field_material.set_shader_parameter("field_span", clouds.span_m)
+	field_material.set_shader_parameter("weather_extent", extent)
+	field_material.set_shader_parameter("weather_cover", cover_texture)
 	rect.material = field_material
 	field.add_child(rect)
 	shadow_material.shader = preload("res://shaders/cloud_shadow.gdshader")
@@ -61,15 +77,25 @@ func configure(world_extent: float, source: ForestCloudField = null) -> void:
 
 func submit(climate: Dictionary, sun_direction: Vector3) -> void:
 	var time: float = climate.get("weather_time_s", 0.0)
-	if time != last_time or cloud_offset != climate.get("cloud_offset_m", clouds.offset_at(time)):
+	if time != last_time or cloud_offset != climate.get("cloud_offset_m", clouds.offset(climate)):
 		last_time = time
-		cloud_offset = climate.get("cloud_offset_m", clouds.offset_at(time))
+		cloud_offset = climate.get("cloud_offset_m", clouds.offset(climate))
 		field_material.set_shader_parameter("cloud_offset_m", cloud_offset)
 		if enabled:
 			field.render_target_update_mode = SubViewport.UPDATE_ONCE
+	var fields := ForestWeatherFront.grid(climate, extent)
+	cover_texture.update(ForestFieldTexture.image(fields.cloud_cover, fields.resolution))
+	field_material.set_shader_parameter("spatial_weather", climate.has("front_extent_m"))
+	field_material.set_shader_parameter("cloud_cover", climate.get("cloud_cover", .18))
+	shadow_material.set_shader_parameter("spatial_weather", climate.has("front_extent_m"))
 	# Pure sampling of immutable input. This never advances the weather owner.
 	rain_mask.update(
-		ForestFieldTexture.image(clouds.weights(climate), clouds.settings.water_resolution)
+		ForestFieldTexture.image(clouds.weights(climate, fields), clouds.settings.water_resolution)
+	)
+	liquid_rain_mask.update(
+		ForestFieldTexture.image(
+			clouds.weights(climate, fields, true), clouds.settings.water_resolution
+		)
 	)
 	if not enabled:
 		visible = false

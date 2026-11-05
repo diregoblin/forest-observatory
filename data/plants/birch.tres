@@ -81,6 +81,7 @@ recruitment_light = 0.3
 weight = 0.28
 wind_strength = 0.025
 deciduous = true
+wind_resistance_m_s = 27.0
 reference_height_m = 13.0
 height_growth_m_year = 0.9
 minimum_light = 0.22
